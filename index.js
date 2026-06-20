@@ -72,7 +72,7 @@ const rankConfigurations = {
     }
 };
 
-// إعداد الأوامر المتاحة (تم الإبقاء على ملف setupbulk الفعلي وحذف الاستدعاء الخاطئ لـ testcard)
+// إعداد الأوامر المتاحة 
 client.commands = new Collection();
 const setupBulkCommand = require(path.join(__dirname, 'src', 'commands', 'setupbulk.js'));
 client.commands.set(setupBulkCommand.data.name, setupBulkCommand);
@@ -224,7 +224,6 @@ client.on(Events.InteractionCreate, async interaction => {
         for (const [id, data] of playerDataMap) {
             const gamesPlayed = parseInt(data.games) || 0;
             
-            // تصفية اللاعبين: يجب أن يتجاوز اللاعب 5 أقيام ليظهر اسمه هنا
             if (gamesPlayed > 5) {
                 const kills = parseInt(data.kills) || 0;
                 const kd = kills / gamesPlayed;
@@ -241,12 +240,11 @@ client.on(Events.InteractionCreate, async interaction => {
 
         let lbDescription = '🏆 **أفضل 10 مقاتلين في السيرفر:**\n*(حصرياً للمقاتلين الذين خاضوا أكثر من 5 معارك)*\n\n';
         
+        // التعديل تم هنا: استخدام <@ID> لعمل المنشن بشكل مباشر
         for (let i = 0; i < top10.length; i++) {
             const p = top10[i];
-            const member = await interaction.guild.members.fetch(p.id).catch(() => null);
-            const name = member ? (member.user.globalName || member.user.username) : `ID: ${p.id}`;
             const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : '🔹';
-            lbDescription += `${medal} **${i + 1}.** ${name} | KD: **${p.kd.toFixed(2)}**\n`;
+            lbDescription += `${medal} **${i + 1}.** <@${p.id}> | KD: **${p.kd.toFixed(2)}**\n`;
         }
 
         const lbEmbed = new EmbedBuilder()
