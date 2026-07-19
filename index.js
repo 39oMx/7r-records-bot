@@ -296,3 +296,36 @@ client.once(Events.ClientReady, c => {
 });
 
 client.login(process.env.DISCORD_TOKEN);
+// --- كود التحديث التلقائي للروستر ---
+client.on(Events.ClientReady, async () => {
+    console.log(`🚀 البوت جاهز، وسيبدأ التحديث التلقائي للروستر...`);
+    
+    // ضبط الوقت (كل 30 دقيقة = 1800000 ميلي ثانية)
+    setInterval(async () => {
+        try {
+            const channel = await client.channels.fetch(process.env.ROSTER_CHANNEL_ID);
+            if (!channel) return;
+
+            // جلب الرسالة التي نريد تحديثها (يجب أن نحدد ID الرسالة في ملف .env)
+            const message = await channel.messages.fetch(process.env.ROSTER_MESSAGE_ID);
+            
+            const role = channel.guild.roles.cache.get(process.env.TEAM_ROLE_ID);
+            await channel.guild.members.fetch(); // تحديث كاش الأعضاء
+
+            const membersList = role.members.map(m => `🔹 <@${m.id}>`).join('\n');
+
+            const embed = new EmbedBuilder()
+                .setTitle(`📋 قائمة أبطال فريق: ${role.name}`)
+                .setDescription(membersList || 'لا يوجد أعضاء حالياً.')
+                .setColor(role.hexColor || '#FF4500')
+                .setFooter({ text: `آخر تحديث تلقائي: ${new Date().toLocaleTimeString()}` });
+
+            // تحديث الرسالة الموجودة مسبقاً
+            await message.edit({ embeds: [embed] });
+            console.log("✅ تم تحديث الروستر تلقائياً!");
+            
+        } catch (error) {
+            console.error("❌ خطأ في التحديث التلقائي:", error);
+        }
+    }, 1800000); // 30 دقيقة
+});
