@@ -103,8 +103,9 @@ bot.on(Events.MessageCreate, async message => {
                 return message.reply('❌ لم يتم العثور على الرتبة المحددة. تأكد من TEAM_ROLE_ID.');
             }
             
-            // تحديث الكاش لضمان جلب جميع الأعضاء
-            await role.members.fetch();
+            // تحديث الكاش لضمان جلب جميع أعضاء السيرفر لمعرفة من يملك الرتبة
+            await message.guild.members.fetch();
+            
             const membersList = role.members.map(m => `• ${m.user.username}`).join('\n');
             
             const embed = new EmbedBuilder()
@@ -184,7 +185,7 @@ bot.on(Events.InteractionCreate, async interaction => {
 // 7. تسجيل الدخول
 // ==========================================
 if (!DISCORD_TOKEN) {
-    console.error("🛑 توقف: لا يوجد توكن للبوت، يرجى إضافته في إعدادات Railway.");
+    console.error("🛑 توقف: لا يوجد توكن للبوت، يرجى إضافته في الإعدادات.");
 } else {
     bot.login(DISCORD_TOKEN).catch(err => {
         console.error("❌ فشل الاتصال بالديسكورد. تأكد من صحة التوكن:", err.message);
