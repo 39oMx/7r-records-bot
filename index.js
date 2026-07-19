@@ -1,9 +1,13 @@
-const { Client, GatewayIntentBits, Collection, AttachmentBuilder, Events, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, PermissionFlagsBits } = require('discord.js');
+const { Client, GatewayIntentBits, AttachmentBuilder, Events, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, PermissionFlagsBits } = require('discord.js');
 const { createCanvas, loadImage, GlobalFonts } = require('@napi-rs/canvas');
 const path = require('path');
+
+// محاولة تحميل المتغيرات إذا كان هناك ملف .env محلي، مع الاعتماد الأساسي على Railway
 require('dotenv').config();
 
-// إعداد السيرفر الوهمي (مهم جداً للمنصات مثل Railway)
+// سطر التحقق من المتغيرات في الـ Logs
+console.log("Check Env:", process.env.DISCORD_TOKEN ? "Token Loaded ✅" : "Token Missing ❌");
+
 const express = require('express');
 const app = express();
 const port = process.env.PORT || 3000;
@@ -18,11 +22,9 @@ const bot = new Client({
 // إعداد الخط
 GlobalFonts.registerFromPath(path.join(__dirname, 'src', 'templates', 'BodoniFLF.ttf'), 'Bodoni FLF');
 
-// متغيرات البيئة
 const OWNER_ID = process.env.OWNER_ID;
 const TEAM_ROLE_ID = process.env.TEAM_ROLE_ID;
 
-// إعدادات البطاقات
 const rankConfigurations = {
     silver: { fileName: 'silver.png', textColor: '#FFFFFF', idColor: '#CCCCCC', avatar: { x: 280, y: 411, r: 131 }, username: { x: 720, y: 610, maxWidth: 450 }, userId: { x: 720, y: 700 }, kd: { x: 256, y: 995 }, kills: { x: 513, y: 995 }, games: { x: 774, y: 995 } },
     gold: { fileName: 'gold.png', textColor: '#FFFFFF', idColor: '#FFD700', avatar: { x: 319, y: 401, r: 127 }, username: { x: 685, y: 690, maxWidth: 450 }, userId: { x: 690, y: 760 }, kd: { x: 283, y: 995 }, kills: { x: 513, y: 995 }, games: { x: 745, y: 995 } },
