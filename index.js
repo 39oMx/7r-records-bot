@@ -3,70 +3,73 @@ const { createCanvas, loadImage, GlobalFonts } = require('@napi-rs/canvas');
 const path = require('path');
 require('dotenv').config();
 
-const express = require('express');
-const app = express();
-app.get('/', (req, res) => res.send('Bot is running'));
-app.listen(process.env.PORT || 3000);
-
 const { getAllPlayerData } = require('./src/utils/googleSheets');
-const bot = new Client({
-    intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent, GatewayIntentBits.GuildMembers]
-});
+const bot = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent, GatewayIntentBits.GuildMembers] });
 
-// إعدادات الخط
-const fontPath = path.join(__dirname, 'src', 'templates', 'BodoniFLF.ttf');
-GlobalFonts.registerFromPath(fontPath, 'Bodoni FLF');
-
-// متغيرات من الـ Environment
-const OWNER_ID = process.env.OWNER_ID;
+// إعدادات الخط والصور
+GlobalFonts.registerFromPath(path.join(__dirname, 'src', 'templates', 'BodoniFLF.ttf'), 'Bodoni FLF');
+const rankConfigurations = { /* ... (نفس الإعدادات السابقة) ... */ };
 const TEAM_ROLE_ID = process.env.TEAM_ROLE_ID;
 
 bot.on(Events.MessageCreate, async message => {
-    const hasPermission = message.member.permissions.has(PermissionFlagsBits.Administrator) || message.member.id === OWNER_ID;
-    
-    if (message.content === '!setup' && hasPermission) {
-        const embed = new EmbedBuilder()
-            .setTitle('⚔️ ميـدان الشـرف')
-            .setDescription('استخدم الأزرار أدناه لعرض بطاقتك أو قائمة الفريق.')
-            .setColor('#FF4500');
+    if (!message.member.permissions.has(PermissionFlagsBits.Administrator) && message.member.id !== process.env.OWNER_ID) return;
 
+    // 1. أمر البطاقات
+    if (message.content === '!setupcard') {
         const row = new ActionRowBuilder().addComponents(
-            new ButtonBuilder().setCustomId('get_my_card').setLabel('بطاقتي').setStyle(ButtonStyle.Danger).setEmoji('🔥'),
-            new ButtonBuilder().setCustomId('show_roster').setLabel('الروستر').setStyle(ButtonStyle.Secondary).setEmoji('📋')
+            new ButtonBuilder().setCustomId('get_my_card').setLabel('استخراج بطاقتي').setStyle(ButtonStyle.Danger)
         );
-        
-        await message.channel.send({ embeds: [embed], components: [row] });
-        await message.delete().catch(() => {});
+        await message.channel.send({ embeds: [new EmbedBuilder().setTitle('🔥 بطاقات اللاعبين').setDescription('اضغط للبطاقة').setColor('#FF4500')], components: [row] });
+        await message.delete();
+    }
+
+    // 2. أمر الروستر (رسالة ثابتة)
+    if (message.content === '!setuproster') {
+        const role = message.guild.roles.cache.get(TEAM_ROLE_ID);
+        const members = role ? role.members.map(m => `• ${m.user.username}`).join('\n') : 'لا يوجد أعضاء.';
+        await message.channel.send({ embeds: [new EmbedBuilder().setTitle(`📋 ${role?.name || 'الفريق'}`).setDescription(members).setColor(role?.hexColor || '#FFFFFF')] });
+        await message.delete();
     }
 });
 
 bot.on(Events.InteractionCreate, async interaction => {
     if (!interaction.isButton()) return;
 
-    // --- منطق الروستر ---
-    if (interaction.customId === 'show_roster') {
-        await interaction.deferReply({ ephemeral: true });
-        const role = interaction.guild.roles.cache.get(TEAM_ROLE_ID);
-        if (!role) return interaction.editReply('❌ لم يتم العثور على رتبة الفريق.');
-
-        const members = role.members.map(m => `• ${m.user.username}`).join('\n') || 'لا يوجد أعضاء حالياً.';
-        const embed = new EmbedBuilder()
-            .setTitle(`📋 روستر فريق: ${role.name}`)
-            .setDescription(members)
-            .setColor(role.hexColor);
-        await interaction.editReply({ embeds: [embed] });
-    }
-
-    // --- منطق البطاقة ---
+    // منطق البطاقة
     if (interaction.customId === 'get_my_card') {
         await interaction.deferReply({ ephemeral: true });
-        const playerDataMap = await getAllPlayerData();
-        const data = playerDataMap.get(interaction.user.id);
-        if (!data) return interaction.editReply('❌ لم يتم العثور على بياناتك في الشيت.');
+        const dataMap = await getAllPlayerData();
+        const data = dataMap.get(interaction.user.id);
+        
+        if (!data) return interaction.editReply('❌ لم يتم العثور على بياناتك.');
 
-        // [أضف هنا كود رسم البطاقة باستخدام rankConfigurations كما اتفقنا سابقاً]
-        // تأكد من استخدام data.rank لتحديد الملف الصحيح
-        await interaction.editReply('✅ جارٍ رسم بطاقتك...'); 
+        const config = rankConfigurations[data.rank.toLowerCase()] || rankConfigurations.silver;
+        const canvas = createCanvas(1200, 1200);
+        const ctx = canvas.getContext('2d');
+        const bg = await loadImage(path.join(__dirname, 'src', 'templates', config.fileName));
+        ctx.drawImage(bg, 0, 0);
+
+        // رسم الأفاتار
+        const avatar = await loadImage(interaction.user.displayAvatarURL({ extension: 'png', size: 256 }));
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(config.avatar.x, config.avatar.y, config.avatar.r, 0, Math.PI * 2);
+        ctx.clip();
+        ctx.drawImage(avatar, config.avatar.x - config.avatar.r, config.avatar.y - config.avatar.r, config.avatar.r * 2, config.avatar.r * 2);
+        ctx.restore();
+
+        // رسم النصوص
+        ctx.fillStyle = config.textColor;
+        ctx.font = '50px "Bodoni FLF"';
+        ctx.fillText(interaction.user.username, config.username.x, config.username.y);
+        ctx.fillStyle = config.idColor;
+        ctx.fillText(data.id, config.userId.x, config.userId.y);
+        ctx.fillStyle = config.textColor;
+        ctx.fillText(data.kd.toString(), config.kd.x, config.kd.y);
+        ctx.fillText(data.kills.toString(), config.kills.x, config.kills.y);
+        ctx.fillText(data.games.toString(), config.games.x, config.games.y);
+
+        await interaction.editReply({ files: [new AttachmentBuilder(canvas.toBuffer(), { name: 'card.png' })] });
     }
 });
 
