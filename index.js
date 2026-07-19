@@ -1,12 +1,7 @@
 const { Client, GatewayIntentBits, AttachmentBuilder, Events, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, PermissionFlagsBits } = require('discord.js');
 const { createCanvas, loadImage, GlobalFonts } = require('@napi-rs/canvas');
 const path = require('path');
-
-// محاولة تحميل المتغيرات إذا كان هناك ملف .env محلي، مع الاعتماد الأساسي على Railway
 require('dotenv').config();
-
-// سطر التحقق من المتغيرات في الـ Logs
-console.log("Check Env:", process.env.DISCORD_TOKEN ? "Token Loaded ✅" : "Token Missing ❌");
 
 const express = require('express');
 const app = express();
@@ -19,7 +14,6 @@ const bot = new Client({
     intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent, GatewayIntentBits.GuildMembers]
 });
 
-// إعداد الخط
 GlobalFonts.registerFromPath(path.join(__dirname, 'src', 'templates', 'BodoniFLF.ttf'), 'Bodoni FLF');
 
 const OWNER_ID = process.env.OWNER_ID;
@@ -37,15 +31,30 @@ const rankConfigurations = {
 bot.on(Events.MessageCreate, async message => {
     if (!message.member || (!message.member.permissions.has(PermissionFlagsBits.Administrator) && message.member.id !== OWNER_ID)) return;
 
+    // أمر البطاقات مع لوحة الصدارة
     if (message.content === '!setupcard') {
+        const dataMap = await getAllPlayerData();
+        const topPlayers = Array.from(dataMap.values())
+            .sort((a, b) => parseFloat(b.kd) - parseFloat(a.kd))
+            .slice(0, 5)
+            .map((p, i) => `${i + 1}. ${p.name || 'لاعب'} | KD: ${p.kd}`)
+            .join('\n');
+
+        const embed = new EmbedBuilder()
+            .setTitle('🔥 بطاقات اللاعبين ولوحة الصدارة')
+            .setDescription(`**أفضل 5 لاعبين حسب الـ KD:**\n\n${topPlayers || 'لا توجد بيانات'}`)
+            .setColor('#FF4500');
+
         const row = new ActionRowBuilder().addComponents(
             new ButtonBuilder().setCustomId('get_my_card').setLabel('استخراج بطاقتي').setStyle(ButtonStyle.Danger).setEmoji('🔥')
         );
-        await message.channel.send({ embeds: [new EmbedBuilder().setTitle('🔥 بطاقات اللاعبين').setDescription('اضغط على الزر لاستخراج بطاقتك الشخصية.').setColor('#FF4500')], components: [row] });
+        await message.channel.send({ embeds: [embed], components: [row] });
         await message.delete().catch(() => {});
     }
 
+    // أمر الروستر (بعد التحديث لجلب الأعضاء)
     if (message.content === '!setuproster') {
+        await message.guild.members.fetch(); 
         const role = message.guild.roles.cache.get(TEAM_ROLE_ID);
         const members = role ? role.members.map(m => `• ${m.user.username}`).join('\n') : 'لا يوجد أعضاء.';
         await message.channel.send({ embeds: [new EmbedBuilder().setTitle(`📋 روستر فريق: ${role?.name || 'غير معروف'}`).setDescription(members).setColor(role?.hexColor || '#FFFFFF')] });
@@ -55,7 +64,6 @@ bot.on(Events.MessageCreate, async message => {
 
 bot.on(Events.InteractionCreate, async interaction => {
     if (!interaction.isButton() || interaction.customId !== 'get_my_card') return;
-
     await interaction.deferReply({ ephemeral: true });
     try {
         const dataMap = await getAllPlayerData();
