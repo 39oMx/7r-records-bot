@@ -31,18 +31,19 @@ const rankConfigurations = {
 bot.on(Events.MessageCreate, async message => {
     if (!message.member || (!message.member.permissions.has(PermissionFlagsBits.Administrator) && message.member.id !== OWNER_ID)) return;
 
-    // أمر البطاقات مع لوحة الصدارة
     if (message.content === '!setupcard') {
         const dataMap = await getAllPlayerData();
+        console.log("البيانات المستلمة:", dataMap.size);
+        
         const topPlayers = Array.from(dataMap.values())
-            .sort((a, b) => parseFloat(b.kd) - parseFloat(a.kd))
+            .sort((a, b) => parseFloat(b.kd || 0) - parseFloat(a.kd || 0))
             .slice(0, 5)
-            .map((p, i) => `${i + 1}. ${p.name || 'لاعب'} | KD: ${p.kd}`)
+            .map((p, i) => `${i + 1}. ${p.name || 'لاعب'} | KD: ${p.kd || '0'}`)
             .join('\n');
 
         const embed = new EmbedBuilder()
             .setTitle('🔥 بطاقات اللاعبين ولوحة الصدارة')
-            .setDescription(`**أفضل 5 لاعبين حسب الـ KD:**\n\n${topPlayers || 'لا توجد بيانات'}`)
+            .setDescription(`**أفضل 5 لاعبين:**\n\n${topPlayers || 'لا توجد بيانات.'}`)
             .setColor('#FF4500');
 
         const row = new ActionRowBuilder().addComponents(
@@ -52,12 +53,15 @@ bot.on(Events.MessageCreate, async message => {
         await message.delete().catch(() => {});
     }
 
-    // أمر الروستر (بعد التحديث لجلب الأعضاء)
     if (message.content === '!setuproster') {
-        await message.guild.members.fetch(); 
         const role = message.guild.roles.cache.get(TEAM_ROLE_ID);
-        const members = role ? role.members.map(m => `• ${m.user.username}`).join('\n') : 'لا يوجد أعضاء.';
-        await message.channel.send({ embeds: [new EmbedBuilder().setTitle(`📋 روستر فريق: ${role?.name || 'غير معروف'}`).setDescription(members).setColor(role?.hexColor || '#FFFFFF')] });
+        if (!role) return message.reply('❌ الرتبة غير موجودة.');
+        
+        // جلب الأعضاء مباشرة من الرتبة لضمان الدقة
+        await role.members.fetch();
+        const membersList = role.members.map(m => `• ${m.user.username}`).join('\n');
+        
+        await message.channel.send({ embeds: [new EmbedBuilder().setTitle(`📋 روستر: ${role.name}`).setDescription(membersList || 'لا يوجد أعضاء.').setColor(role.hexColor)] });
         await message.delete().catch(() => {});
     }
 });
@@ -68,9 +72,9 @@ bot.on(Events.InteractionCreate, async interaction => {
     try {
         const dataMap = await getAllPlayerData();
         const data = dataMap.get(interaction.user.id);
-        if (!data) return interaction.editReply('❌ لم يتم العثور على بياناتك في الشيت.');
+        if (!data) return interaction.editReply('❌ بياناتك غير موجودة في الشيت.');
 
-        const config = rankConfigurations[data.rank.toLowerCase()] || rankConfigurations.silver;
+        const config = rankConfigurations[data.rank?.toLowerCase()] || rankConfigurations.silver;
         const canvas = createCanvas(1200, 1200);
         const ctx = canvas.getContext('2d');
         const bg = await loadImage(path.join(__dirname, 'src', 'templates', config.fileName));
@@ -88,16 +92,16 @@ bot.on(Events.InteractionCreate, async interaction => {
         ctx.font = '50px "Bodoni FLF"';
         ctx.fillText(interaction.user.username, config.username.x, config.username.y);
         ctx.fillStyle = config.idColor;
-        ctx.fillText(data.id, config.userId.x, config.userId.y);
+        ctx.fillText(data.id || 'N/A', config.userId.x, config.userId.y);
         ctx.fillStyle = config.textColor;
-        ctx.fillText(data.kd.toString(), config.kd.x, config.kd.y);
-        ctx.fillText(data.kills.toString(), config.kills.x, config.kills.y);
-        ctx.fillText(data.games.toString(), config.games.x, config.games.y);
+        ctx.fillText(data.kd?.toString() || '0', config.kd.x, config.kd.y);
+        ctx.fillText(data.kills?.toString() || '0', config.kills.x, config.kills.y);
+        ctx.fillText(data.games?.toString() || '0', config.games.x, config.games.y);
 
         await interaction.editReply({ files: [new AttachmentBuilder(canvas.toBuffer(), { name: 'card.png' })] });
     } catch (e) {
         console.error(e);
-        interaction.editReply('❌ حدث خطأ أثناء إنشاء البطاقة.');
+        interaction.editReply('❌ خطأ أثناء التصميم.');
     }
 });
 
