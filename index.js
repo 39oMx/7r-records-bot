@@ -77,7 +77,7 @@ client.commands = new Collection();
 const setupBulkCommand = require(path.join(__dirname, 'src', 'commands', 'setupbulk.js'));
 client.commands.set(setupBulkCommand.data.name, setupBulkCommand);
 
-// --- [دالة التحديث الموحدة للروستر] ---
+// --- [دالة التحديث الموحدة للروستر بالصور] ---
 async function updateRosterLive() {
     try {
         const channelId = process.env.ROSTER_CHANNEL_ID;
@@ -101,22 +101,128 @@ async function updateRosterLive() {
         const message = await channel.messages.fetch(messageId);
         if (!message) return;
 
-        // عمل منشن لكل عضو يحمل الرتبة
-        const membersList = role.members.map(m => `🔹 <@${m.id}>`).join('\n');
+        // 1. استخراج الأعضاء مع جلب أعلى رول حقيقي لكل عضو (الفهرسة التلقائية)
+        const membersWithHighestRole = role.members.map(member => {
+            const validRoles = member.roles.cache
+                .filter(r => r.id !== channel.guild.id && !r.managed)
+                .sort((a, b) => b.position - a.position);
+            
+            const highestRole = validRoles.first();
+            return {
+                member,
+                displayName: member.displayName,
+                highestRoleName: highestRole ? highestRole.name : 'عضو',
+                rolePosition: highestRole ? highestRole.position : 0
+            };
+        });
 
+        // 2. ترتيب اللاعبين تنازلياً من أعلى رتبة إلى أدناها
+        membersWithHighestRole.sort((a, b) => b.rolePosition - a.rolePosition);
+
+        // 3. تقسيم الأعضاء إلى مجموعات (كل 20 لاعباً في صورة)
+        const chunkSize = 20;
+        const chunks = [];
+        for (let i = 0; i < membersWithHighestRole.length; i += chunkSize) {
+            chunks.push(membersWithHighestRole.slice(i, i + chunkSize));
+        }
+
+        // في حال لم يكن هناك أعضاء
+        if (chunks.length === 0) {
+            const embed = new EmbedBuilder()
+                .setTitle(`📋 قائمة أبطال فريق: ${role.name}`)
+                .setDescription('لا يوجد أعضاء يحملون هذه الرتبة حالياً.')
+                .setColor(role.hexColor || '#FF4500')
+                .setThumbnail(channel.guild.iconURL({ dynamic: true }))
+                .setFooter({ text: `آخر تحديث تلقائي للروستر: ${new Date().toLocaleTimeString('ar-EG')}` })
+                .setTimestamp();
+            await message.edit({ embeds: [embed], files: [] });
+            return;
+        }
+
+        // مسار قالب الصورة
+        const templatePath = path.join(__dirname, 'src', 'templates', 'roster_bg.png');
+        const background = await loadImage(templatePath);
+        
+        const attachments = []; 
+
+        // 4. إنشاء الصور لكل مجموعة (Chunk)
+        for (let c = 0; c < chunks.length; c++) {
+            const currentChunk = chunks[c];
+            const canvas = createCanvas(background.width, background.height);
+            const ctx = canvas.getContext('2d');
+            
+            ctx.drawImage(background, 0, 0, canvas.width, canvas.height);
+            ctx.font = 'bold 22px "Bodoni FLF", sans-serif'; 
+            ctx.shadowColor = 'rgba(0, 0, 0, 0.7)';
+            ctx.shadowBlur = 4;
+            ctx.shadowOffsetX = 2;
+            ctx.shadowOffsetY = 2;
+
+            // الإحداثيات (يمكنك تعديلها لاحقاً لضبطها 100% مع قالبك)
+            const leftColumnX_Num = 95;    
+            const leftColumnX_Name = 135;  
+            const leftColumnX_Role = 425;  
+            
+            const rightColumnX_Num = 615;  
+            const rightColumnX_Name = 655; 
+            const rightColumnX_Role = 945; 
+
+            const startY = 245;            
+            const rowHeight = 44.5;        
+
+            currentChunk.forEach((item, index) => {
+                let xNum, xName, xRole, y;
+                
+                // حساب الرقم التسلسلي العام
+                const globalIndex = (c * 20) + index + 1;
+
+                if (index < 10) {
+                    xNum = leftColumnX_Num;
+                    xName = leftColumnX_Name;
+                    xRole = leftColumnX_Role;
+                    y = startY + (index * rowHeight);
+                } else {
+                    xNum = rightColumnX_Num;
+                    xName = rightColumnX_Name;
+                    xRole = rightColumnX_Role;
+                    y = startY + ((index - 10) * rowHeight);
+                }
+
+                // رسم الرقم التسلسلي 
+                ctx.fillStyle = '#FF4444'; 
+                ctx.textAlign = 'right';
+                ctx.fillText(`${globalIndex}-`, xNum, y);
+
+                // رسم النيك نيم
+                ctx.fillStyle = '#FFFFFF';
+                ctx.textAlign = 'left';
+                let formattedName = item.displayName.length > 17 ? item.displayName.substring(0, 15) + '...' : item.displayName;
+                ctx.fillText(formattedName, xName, y);
+
+                // رسم الرتبة
+                ctx.fillStyle = '#CCCCCC'; 
+                let formattedRole = item.highestRoleName.length > 15 ? item.highestRoleName.substring(0, 13) + '...' : item.highestRoleName;
+                ctx.fillText(formattedRole, xRole, y);
+            });
+
+            const buffer = await canvas.toBuffer('image/png');
+            attachments.push(new AttachmentBuilder(buffer, { name: `roster_part_${c + 1}.png` }));
+        }
+
+        // 5. تعديل الرسالة لتشمل جميع الصور
         const embed = new EmbedBuilder()
             .setTitle(`📋 قائمة أبطال فريق: ${role.name}`)
-            .setDescription(membersList || 'لا يوجد أعضاء يحملون هذه الرتبة حالياً.')
-            .setColor(role.hexColor || '#FF4500')
+            .setDescription(`إجمالي أعضاء الفريق المسجلين: **${role.members.size}** لاعب\n*يتم فهرسة اللاعبين تلقائياً حسب أعلى رتبة يمتلكونها.*`)
+            .setColor(role.hexColor || '#8B0000') 
             .setThumbnail(channel.guild.iconURL({ dynamic: true }))
-            .setFooter({ text: `آخر تحديث تلقائي للروستر: ${new Date().toLocaleTimeString('ar-EG')}` })
+            .setFooter({ text: `آخر تحديث تلقائي: ${new Date().toLocaleTimeString('ar-EG')}` })
             .setTimestamp();
 
-        // تحديث الرسالة الثابتة مسبقاً في الديسكورد
-        await message.edit({ embeds: [embed] });
-        console.log("✅ تم تحديث الروستر بنجاح وبشكل تلقائي!");
+        await message.edit({ embeds: [embed], files: attachments });
+        console.log("✅ تم تحديث الروستر التسلسلي بالصور بنجاح وبشكل تلقائي!");
+
     } catch (error) {
-        console.error("❌ خطأ أثناء تحديث الروستر تلقائياً:", error.message);
+        console.error("❌ خطأ أثناء تحديث الروستر بالصور:", error);
     }
 }
 
@@ -162,18 +268,11 @@ client.on(Events.MessageCreate, async message => {
                 return message.reply('❌ لم يتم العثور على الرتبة المحددة. تأكد من إعداد TEAM_ROLE_ID.');
             }
 
-            const membersList = role.members.map(m => `🔹 <@${m.id}>`).join('\n');
-
-            const embed = new EmbedBuilder()
-                .setTitle(`📋 قائمة أبطال فريق: ${role.name}`)
-                .setDescription(membersList || 'لا يوجد أعضاء يحملون هذه الرتبة حالياً.')
-                .setColor(role.hexColor || '#FF4500')
-                .setThumbnail(message.guild.iconURL({ dynamic: true }))
-                .setFooter({ text: `العدد الإجمالي: ${role.members.size} لاعب/ـة` })
-                .setTimestamp();
-
-            await message.channel.send({ embeds: [embed] });
+            // لتشغيل الدالة المحدثة مباشرة عبر الأمر للتجربة
+            await updateRosterLive(); 
+            message.reply('✅ جاري تحديث الروستر بالصور...').then(msg => setTimeout(() => msg.delete().catch(() => {}), 3000));
             await message.delete().catch(() => {});
+            
         } catch (error) {
             console.error("❌ خطأ في أمر setuproster:", error);
             message.reply('❌ حدث خطأ أثناء تنفيذ أمر الروستر. تأكد من الصلاحيات.');
