@@ -93,8 +93,8 @@ async function updateRosterLive() {
         const channel = await client.channels.fetch(channelId);
         if (!channel) return;
 
-        // تحديث كاش الأعضاء والرتب لضمان دقة البيانات
-        await channel.guild.members.fetch();
+       // تحديث كاش الأعضاء والرتب لضمان دقة البيانات
+        // await channel.guild.members.fetch();  <-- قم بحذف هذا السطر أو وضع قبله //
         const role = await channel.guild.roles.fetch(teamRoleId);
         if (!role) return;
 
