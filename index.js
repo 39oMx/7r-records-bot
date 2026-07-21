@@ -28,9 +28,9 @@ const client = new Client({
     ]
 });
 
-// تحميل الخط
-const fontPath = path.join(__dirname, 'src', 'templates', 'BodoniFLF.ttf');
-GlobalFonts.registerFromPath(fontPath, 'Bodoni FLF');
+// تحميل الخط الجديد
+const fontPath = path.join(__dirname, 'src', 'templates', 'PlayfairDisplay-VariableFont_wght.ttf');
+GlobalFonts.registerFromPath(fontPath, 'Playfair Display');
 
 // ⬇️ === [ أضف أيديهات الرتب والأسماء المخصصة هنا بالترتيب من الأعلى للأقل ] === ⬇️
 const CUSTOM_ROLES = [
@@ -106,7 +106,7 @@ async function updateRosterLive() {
         const channel = await client.channels.fetch(channelId);
         if (!channel) return;
 
-        const role = await channel.guild.roles.fetch(teamRoleId);
+        const role = channel.guild.roles.cache.get(teamRoleId);
         if (!role) return;
 
         const message = await channel.messages.fetch(messageId);
@@ -114,26 +114,23 @@ async function updateRosterLive() {
 
         // 1. استخراج الأعضاء واستبدال الرتب بالأسماء المخصصة مع تحديد الأولوية
         const membersProcessed = [];
-        role.members.forEach(member => {
+        Array.from(role.members.values()).forEach(member => {
             let matchedCustomRole = null;
-            let priorityIndex = 999; // أولوية منخفضة كافتراضية
+            let priorityIndex = 999; 
 
-            // البحث عن أول رتبة يمتلكها العضو من القائمة المحددة
             for (let i = 0; i < CUSTOM_ROLES.length; i++) {
                 const roleConfig = CUSTOM_ROLES[i];
                 if (member.roles.cache.has(roleConfig.id)) {
                     matchedCustomRole = roleConfig;
-                    priorityIndex = i; // رقم Index هو ترتيب الرتبة (0 هو الأعلى)
+                    priorityIndex = i; 
                     break;
                 }
             }
 
-            // تحديد الاسم المخصص للرتبة
             let roleNameToShow = 'عضو';
             if (matchedCustomRole) {
                 roleNameToShow = matchedCustomRole.displayName;
             } else {
-                // إذا لم يملك رتبة من القائمة المحددة، نأخذ أعلى رتبة لديه
                 const highestNormalRole = member.roles.cache
                     .filter(r => r.id !== channel.guild.id && !r.managed)
                     .sort((a, b) => b.position - a.position)
@@ -143,16 +140,17 @@ async function updateRosterLive() {
 
             membersProcessed.push({
                 member,
-                displayName: member.user.globalName || member.user.username,
+                // جلب اسم العضو داخل السيرفر كأولوية
+                displayName: member.displayName,
                 roleName: roleNameToShow,
                 priorityIndex: priorityIndex
             });
         });
 
-        // 2. ترتيب اللاعبين من الأعلى للأقل بناءً على ترتيب الرتب في قائمة CUSTOM_ROLES
+        // 2. ترتيب اللاعبين
         membersProcessed.sort((a, b) => a.priorityIndex - b.priorityIndex);
 
-        // 3. تقسيم الأعضاء إلى مجموعات (كل 20 لاعباً في صورة)
+        // 3. تقسيم الأعضاء
         const chunkSize = 20;
         const chunks = [];
         for (let i = 0; i < membersProcessed.length; i += chunkSize) {
@@ -184,7 +182,8 @@ async function updateRosterLive() {
             const ctx = canvas.getContext('2d');
             
             ctx.drawImage(background, 0, 0, canvas.width, canvas.height);
-            ctx.font = 'bold 22px "Bodoni FLF", sans-serif'; 
+            // استخدام الخط الجديد هنا للروستر
+            ctx.font = 'bold 22px "Playfair Display", sans-serif'; 
             ctx.shadowColor = 'rgba(0, 0, 0, 0.7)';
             ctx.shadowBlur = 4;
             ctx.shadowOffsetX = 2;
@@ -217,18 +216,15 @@ async function updateRosterLive() {
                     y = startY + ((index - 10) * rowHeight);
                 }
 
-                // كتابة الرقم التسلسلي
                 ctx.fillStyle = '#FF4444'; 
                 ctx.textAlign = 'right';
                 ctx.fillText(`${globalIndex}-`, xNum, y);
 
-                // كتابة اسم اللاعب
                 ctx.fillStyle = '#FFFFFF';
                 ctx.textAlign = 'left';
                 let formattedName = item.displayName.length > 17 ? item.displayName.substring(0, 15) + '...' : item.displayName;
                 ctx.fillText(formattedName, xName, y);
 
-                // كتابة الاسم المخصص للرتبة
                 ctx.fillStyle = '#CCCCCC'; 
                 let formattedRole = item.roleName.length > 15 ? item.roleName.substring(0, 13) + '...' : item.roleName;
                 ctx.fillText(formattedRole, xRole, y);
@@ -238,7 +234,6 @@ async function updateRosterLive() {
             const buffer = await canvas.toBuffer('image/png');
             attachments.push(new AttachmentBuilder(buffer, { name: fileName }));
 
-            // إنشاء Embed مستقل لكل صورة لضمان إرسالها أسفل بعضها البعض
             const imgEmbed = new EmbedBuilder()
                 .setColor(role.hexColor || '#8B0000')
                 .setImage(`attachment://${fileName}`);
@@ -257,7 +252,6 @@ async function updateRosterLive() {
             embeds.push(imgEmbed);
         }
 
-        // 5. تعديل الرسالة لتعرض الـ Embeds والصور رأسياً
         await message.edit({ embeds: embeds, files: attachments });
         console.log("✅ تم تحديث الروستر بالأسماء المخصصة للرتب بنجاح!");
 
@@ -266,7 +260,6 @@ async function updateRosterLive() {
     }
 }
 
-// 1. أمر إنشاء واجهة التفاعل للإدارة (!setup) وأمر الروستر (!setuproster)
 client.on(Events.MessageCreate, async message => {
     if (!message.member || !message.member.permissions.has(PermissionFlagsBits.Administrator)) return;
 
@@ -315,7 +308,6 @@ client.on(Events.MessageCreate, async message => {
     }
 });
 
-// 2. التفاعل مع الأزرار والأوامر
 client.on(Events.InteractionCreate, async interaction => {
     if (interaction.isChatInputCommand()) {
         const command = client.commands.get(interaction.commandName);
@@ -356,7 +348,8 @@ client.on(Events.InteractionCreate, async interaction => {
             }
 
             const currentRank = rankConfigurations[determinedRank];
-            const nickname = interaction.user.globalName || interaction.user.username;
+            // جلب النيك نيم داخل السيرفر الخاص باللاعب في بطاقة الإحصائيات أيضاً
+            const nickname = interaction.member ? interaction.member.displayName : (interaction.user.globalName || interaction.user.username);
             const avatarUrl = interaction.user.displayAvatarURL({ extension: 'png', size: 256 });
 
             const templatePath = path.join(__dirname, 'src', 'templates', currentRank.fileName);
@@ -386,19 +379,20 @@ client.on(Events.InteractionCreate, async interaction => {
 
             ctx.fillStyle = currentRank.textColor; 
             let fontSize = 38; 
-            ctx.font = `bold ${fontSize}px "Bodoni FLF"`;
+            // استخدام الخط الجديد هنا لتوليد البطاقات
+            ctx.font = `bold ${fontSize}px "Playfair Display"`;
             while (ctx.measureText(nickname).width > currentRank.username.maxWidth && fontSize > 18) {
                 fontSize -= 2; 
-                ctx.font = `bold ${fontSize}px "Bodoni FLF"`;
+                ctx.font = `bold ${fontSize}px "Playfair Display"`;
             }
             ctx.fillText(nickname, currentRank.username.x, currentRank.username.y); 
 
             ctx.fillStyle = currentRank.idColor; 
-            ctx.font = '18px "Bodoni FLF"'; 
+            ctx.font = '18px "Playfair Display"'; 
             ctx.fillText(`ID: ${discordId}`, currentRank.userId.x, currentRank.userId.y); 
 
             ctx.fillStyle = currentRank.textColor; 
-            ctx.font = 'bold 52px "Bodoni FLF"'; 
+            ctx.font = 'bold 52px "Playfair Display"'; 
             
             let displayKD = kdValue.toFixed(1); 
             ctx.fillText(displayKD, currentRank.kd.x, currentRank.kd.y); 
