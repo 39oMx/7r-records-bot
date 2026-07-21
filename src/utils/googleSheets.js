@@ -3,23 +3,16 @@ require('dotenv').config();
 
 const SCOPES = ['https://www.googleapis.com/auth/spreadsheets.readonly'];
 
-// بيانات الاعتماد المدمجة لتجاوز أي مشاكل في الاستضافة
-const clientEmail = "id-r-sheets-reader@r-cards-bot.iam.gserviceaccount.com";
-const privateKey = `-----BEGIN PRIVATE KEY-----\nMIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQDqPYqznCO1csnQ\nuQ7t0xMB8nb+rQboK02HDyRX1ddt/iUpRRobGX1cHBND8q5SoFwSp9IJHGFqnKsV\nPmMupr2tj0djn+YlZ2inaoUf4lsoafG8ROk4QYS48VgdczwHMTSeieT+nrCOEQXf\nRqUlyroferRpMbjeTsKnT/aQ+1F+Phaez1Jfbs9KKah+40yvMUroDbXPLhjhkJzJ\nCzCfiClVDwLq2ryXqmI+HgCnUcwMnfmFuVctip4U1ZmgQK7bmBTANBPeDUqTiG0j\nLxO323nSvTjfp6QjzepJqJe+4XgnZ7ZyqPf/5qbbMk5YWNqjjs9hv/kBboPeKZl5\nq/U75YfNAgMBAAECggEAAJXSHGm7kRtqbI6FqSNFBBwxO4xA+WLbfv1L/elft0T4\nW+jju7JqMv0yYCmj6TEpAW85Fzq8lvq/rALqcqumbGk3kLQea+/yY7HgjDvh/Zus\nYJw6IfrsXuS8XLKfakDjjWWN/M1Qn6+TuIMgVwXLkesCTmJPh6yWLvQETacrY7t2\niMP+iVTlQ+hBf9hFtDsKddf8SXwS2veAz2RspnjDv75LkM0wK1QfjIP55KK9dGdp\nY84jyCUzCqQplDqCpDaA7XD8Gz1Te77Apz6ig/AoW7YjMiAIaj4EgP26TeVf+yVV\ngdYUr1KnvWLos/g6E64XLvD/L9da2dciivXzM+HUBQKBgQD3yuAKs8oaIp9DGmfT\ZfXa0TqmyKOxRVxl0+RYGLrCdwifXneVpB7USkov0Z9cc1w6ZW+bWurHvkJt5PvB\ntxkPBcYznvArmIs/IsCadXWon4C8keZ8qmlb3GEaxk/Fy3pSpeoKPIEYnr/qak8e\n46bxg4aqZKQWBBOEcUNMNmRptwKBgQDx/8DjgXMiRF+a6dkeDS2AqCo7zd3HNOtQ\nIuC2ssx6SDZfZtgb5OaoV9HnJ/miVI7o04vBKubTolf+l0k9qJVT/JQbEz11yP7B\n1rHJmt4HX2VWi0xEZvCBYm+tCqyGhWqLfQRpSAwq3P0bnzj4LLzh/L9yej4kaXt0\nXo3tcEqqmwKBgQC6Ulta0Mv0EPqOW4mchLt0WQVwKcgkYNJUYxr9P0MXPKhIJaFn\n7Oudl2rnQAlDXB8KbgGY4KlPnnmW5qqDg+kcyau6XxWawm5aAAixXAcnzx/fKxoT\nvZPRlgmSN3H+eb017jnojoxH9f67BksOIAIE8nBNKbXUNCZ03THMWc3xSwKBgB/M\n3+gFhr+mBHoy6JkOWkBh2MrrDo2y4okxTB41+LDI9Hws45Emzzin8alSk3dFbVIj\nGmZT4OlGmBGYh8NWd+kFc+Dq8lScCP4n3E0F0M9fNc3dmDQU4t3dtZcjo/A5b/rM\nftvm39JyH8CVd8ME/f0kXXQJpEjco6BzHGtrKiSpAoGBAOUyUmfF5hAMEitcAH6z\nq2SFSP7mbEA5uf8xFXSAmqob4043QDARivCBzLFdgJjdZLy7dV5tnL09pjFAs+YD\EgF6JrTz+rktQG5qZnIBLF3Q83MoBMod8phlcI5LRJ2Fym5k+wRi/Zy1wzn/KEg0\nkTcUKnX6ch8ES0LQ9JdJcwpR\n-----END PRIVATE KEY-----`;
+// بيانات حساب الخدمة الجديد
+const clientEmail = "Records-bot@r-cards-bot.iam.gserviceaccount.com";
+const privateKey = `-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQDbSraNPRRVZLcB\nFMY6q1mcA4jj8ImPdcbyMjnZ55vi9okKoEwoyehe4Ok8r9ov8rbY6547yRDiMBSX\n8E4uRTmziuu/k+DaUPOt1XnTTa2j0NL9ZnDjMIbFgIMBateD/VoKRjHxl3TGoVzj\nejHmZPGWUKey4CgDStJXwq4tyTay8rP6XGTqT+oAcRIpBnVpJWmTr8Ylih49v2W5\nfUM27hIq41vupR6GlP7Ktsf6l2/UreqZxrF5Zf3Fmuq1wSQVaqfLxShgUZdTgVmL\nK8aVqdfDoZAZG764mwQM/ADYCSg+5cW1b6vm7BNVWv9J8+JifkE1CXfNXNtl+sWV\nPW9ik2mzAgMBAAECggEAHQOKma9OJGo56FO2UobfSUwSbY4itS9xDhRlIRaKwoG5\n6gUBbpggPYVmdpgRtyxW0uaBvglBSZvw7ZVm0qpoEwA7ZtKK+nehdgt7neB2K+ly\nMQK/xt9hxXnWW3amYxk/M4LMEtnmIm2xG4vMVF5gtHGhboJH6P+aSvBAGWC48v34\n3Md3aFJo0sBz9LGwRxPVMZO72Xb4yVDi0LQsWUYvJYo9k5Qt6NQe4D6HTLMhoooW\nFqYlO2DMo1GzcvollX07VH7yVqcqXYzcO9RLK4lj+MQWJxV+5C+PkHL2I8ROGGBA\novFedBawU1qtBWGQrfhWuhBlR6aBOXPjrHLSLC+VuQKBgQD4AQQhwMnFponALzSF\AeD2fnKhzc1eRwwNNamKNu7GrUSAGGZeyjiMaCs2AxzLL9Qf3QpoSjjOnVYrnrqu\nOSlHVYuO2soBb1FnKLGiIUWFiXP3cNqv8gu6SPSlfsA1wgT3YzLby+FAwMhTPYK4\nvXFe7gvupQp1DIVuGVaTE1GFfQKBgQDiXLY7FDaZ0jvqDE/6AWhIhvddZ/sJllhK\ncbq2640VtOgxMfuCU4WF46t/r094OHKtOKtIoyyX39Y+/wE/Zl9oYdhxLK2NbSus\nGjDNRrPBJKdTLtVisP57VfLot10lP5swTfxo90FewfNo/6QW2hMIpW7d+k0AK085\nEIn9fnkS7wKBgQD3+EwhU5prvfDN8GUa+J3u2M/VaOmG8pLiQl2ajQKCNIzhZ4Q0\nEw4nlaBfCQ2pO9FlaqYVUOEr9bVLOBKAUTcs1CQOWkTQ2nUSKGY0LgBNXPpO1tBS\nTDndsUSslOeq2KwOj2kyy9AV5qxmToJ+JS1ONcZIf0zNbA+d3kfqFs7UIQKBgGfu\n37ESn9tSvzXAf3wv5zzd03gsxQPq5xEPVQal8rqTvMTRyURWqwkFtvnCeb+eU3Eb\ngvGwEkqNeOal2WHN1GKuAl48gFdeV94GCEPogaJd/QHhkBJnaAEjPowBnR/8K3or\nZIihdn9WmDeOoT3o1TJ0GwqK4Y4BVLfD00f0KQ07AoGAP8za7RdAG2TFAOymT3+9\nR9gmzFCpkUZojJ0d4PxOytu24WxVQk2Oa0itj4G+T/RIbXidYWmQbdqtDdlXShq0\nu7cUkN+0CwUOoviSeWaldcehIUbH1ZKtdo11Qo2L2RDLUIt/GWzbVPWAfkknHjT/\n3/wR4vq9EYK07pgi8JmX9Lo=\n-----END PRIVATE KEY-----`;
 
-const sheetId = process.env.GOOGLE_SHEET_ID || process.env.SHEET_ID;
-
-console.log("-----------------------------------------");
-console.log("Direct connection check:");
-console.log(`Email: ${clientEmail ? 'EXISTS' : 'MISSING'}`);
-console.log(`Private Key: ${privateKey ? 'EXISTS' : 'MISSING'}`);
-console.log(`Sheet ID: ${sheetId ? 'EXISTS' : 'MISSING'}`);
-console.log("-----------------------------------------");
+const sheetId = process.env.GOOGLE_SHEET_ID;
 
 const auth = new google.auth.GoogleAuth({
     credentials: {
         client_email: clientEmail,
-        private_key: privateKey ? privateKey.replace(/\\n/g, '\n') : undefined
+        private_key: privateKey.replace(/\\n/g, '\n'),
     },
     scopes: SCOPES,
 });
@@ -51,7 +44,7 @@ async function getAllPlayerData() {
         
         return dataMap;
     } catch (error) {
-        console.error("Error reading Google Sheet:", error.message);
+        console.error("❌ خطأ أثناء قراءة البيانات من جوجل شيت:", error.message);
         throw error;
     }
 }
