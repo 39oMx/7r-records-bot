@@ -93,8 +93,6 @@ async function updateRosterLive() {
         const channel = await client.channels.fetch(channelId);
         if (!channel) return;
 
-        // تحديث كاش الأعضاء والرتب لضمان دقة البيانات
-        await channel.guild.members.fetch();
         const role = await channel.guild.roles.fetch(teamRoleId);
         if (!role) return;
 
@@ -262,8 +260,6 @@ client.on(Events.MessageCreate, async message => {
     if (message.content === '!setuproster') {
         try {
             const TEAM_ROLE_ID = process.env.TEAM_ROLE_ID;
-            await message.guild.members.fetch();
-
             const role = message.guild.roles.cache.get(TEAM_ROLE_ID);
             if (!role) {
                 return message.reply('❌ لم يتم العثور على الرتبة المحددة. تأكد من إعداد TEAM_ROLE_ID.');
@@ -275,9 +271,9 @@ client.on(Events.MessageCreate, async message => {
             await message.delete().catch(() => {});
             
             } catch (error) {
-        console.error("❌ خطأ أثناء تحديث الروستر بالصور:", error);
-        console.error("Full error:", JSON.stringify(error, Object.getOwnPropertyNames(error)));
-    }
+            console.error("❌ خطأ في أمر setuproster:", error);
+            message.reply(`❌ خطأ: \`${error.message}\``);
+        }
 }
 });
 
@@ -425,7 +421,12 @@ client.on(Events.InteractionCreate, async interaction => {
 // الأحداث عند جاهزية البوت والتحديثات الدائمة
 client.once(Events.ClientReady, async c => {
     console.log(`🚀 البوت شغال ومستعد للأتمتة باسم: ${c.user.tag}`);
-    
+
+    // جلب الأعضاء مرة واحدة بس عند التشغيل
+    for (const guild of c.guilds.cache.values()) {
+        await guild.members.fetch();
+    }
+
     // 1️⃣ تحديث فوري ومباشر بمجرد إقلاع البوت وتلقيه الاتصال
     await updateRosterLive();
     
@@ -436,17 +437,19 @@ client.once(Events.ClientReady, async c => {
 });
 
 // 3️⃣ تحديث لحظي (Real-Time): عند تعديل رتب أي عضو بالسيرفر (إضافة/إزالة رتبة الروستر)
-client.on(Events.GuildMemberUpdate, async (oldMember, newMember) => {
+let rosterUpdateTimeout = null;
+
+client.on(Events.GuildMemberUpdate, (oldMember, newMember) => {
     const teamRoleId = process.env.TEAM_ROLE_ID;
     if (!teamRoleId) return;
 
-    // مقارنة حالة الرتبة بين القديم والجديد لتقليل استهلاك الموارد
     const hadRole = oldMember.roles.cache.has(teamRoleId);
     const hasRole = newMember.roles.cache.has(teamRoleId);
 
     if (hadRole !== hasRole) {
-        console.log(`🔄 رتبة الفريق تغيرت للعضو: ${newMember.user.tag} (جاري تحديث الروستر فوراً...)`);
-        await updateRosterLive();
+        console.log(`🔄 رتبة الفريق تغيرت للعضو: ${newMember.user.tag} (جاري جدولة التحديث...)`);
+        clearTimeout(rosterUpdateTimeout);
+        rosterUpdateTimeout = setTimeout(() => updateRosterLive(), 3000);
     }
 });
 
