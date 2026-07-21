@@ -108,7 +108,7 @@ async function updateRosterLive() {
             const highestRole = validRoles.first();
             return {
                 member,
-                displayName: member.displayName,
+                 displayName: member.user.globalName || member.user.username,
                 highestRoleName: highestRole ? highestRole.name : 'عضو',
                 rolePosition: highestRole ? highestRole.position : 0
             };
