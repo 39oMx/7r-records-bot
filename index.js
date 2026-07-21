@@ -31,9 +31,6 @@ const client = new Client({
 // تحميل الخط الجديد
 const fontPath = path.join(__dirname, 'src', 'templates', 'PlayfairDisplay-VariableFont_wght.ttf');
 GlobalFonts.registerFromPath(fontPath, 'Playfair Display');
-// تحميل الخط الجديد
-const fontPath = path.join(__dirname, 'src', 'templates', 'PlayfairDisplay-VariableFont_wght.ttf');
-GlobalFonts.registerFromPath(fontPath, 'Playfair Display');
 
 // --- [دالة تنظيف الأسماء من اليونيكود المزخرف والرموز] ---
 function sanitizeName(text) {
@@ -44,8 +41,8 @@ function sanitizeName(text) {
     clean = clean.replace(/\s+/g, ' ').trim();
     return clean.length > 0 ? clean : 'Player';
 }
-}
 // -------------------------------------------------------
+
 // ⬇️ === [ أضف أيديهات الرتب والأسماء المخصصة هنا بالترتيب من الأعلى للأقل ] === ⬇️
 const CUSTOM_ROLES = [
     { id: '1150626780550533141', displayName: 'OWNER' },
@@ -154,7 +151,6 @@ async function updateRosterLive() {
 
             membersProcessed.push({
                 member,
-                // جلب اسم العضو داخل السيرفر كأولوية (بعد التنظيف)
                 displayName: sanitizeName(member.displayName),
                 roleName: roleNameToShow,
                 priorityIndex: priorityIndex
@@ -196,7 +192,6 @@ async function updateRosterLive() {
             const ctx = canvas.getContext('2d');
             
             ctx.drawImage(background, 0, 0, canvas.width, canvas.height);
-            // استخدام الخط الجديد هنا للروستر
             ctx.font = 'bold 22px "Playfair Display", sans-serif'; 
             ctx.shadowColor = 'rgba(0, 0, 0, 0.7)';
             ctx.shadowBlur = 4;
@@ -315,7 +310,7 @@ client.on(Events.MessageCreate, async message => {
             message.reply('✅ جاري تحديث الروستر بالصور...').then(msg => setTimeout(() => msg.delete().catch(() => {}), 3000));
             await message.delete().catch(() => {});
             
-            } catch (error) {
+        } catch (error) {
             console.error("❌ خطأ في أمر setuproster:", error);
             message.reply(`❌ خطأ: \`${error.message}\``);
         }
@@ -362,7 +357,6 @@ client.on(Events.InteractionCreate, async interaction => {
             }
 
             const currentRank = rankConfigurations[determinedRank];
-            // جلب النيك نيم داخل السيرفر الخاص باللاعب في بطاقة الإحصائيات أيضاً (بعد التنظيف)
             const nickname = sanitizeName(interaction.member ? interaction.member.displayName : (interaction.user.globalName || interaction.user.username));
             const avatarUrl = interaction.user.displayAvatarURL({ extension: 'png', size: 256 });
 
@@ -393,7 +387,6 @@ client.on(Events.InteractionCreate, async interaction => {
 
             ctx.fillStyle = currentRank.textColor; 
             let fontSize = 38; 
-            // استخدام الخط الجديد هنا لتوليد البطاقات
             ctx.font = `bold ${fontSize}px "Playfair Display"`;
             while (ctx.measureText(nickname).width > currentRank.username.maxWidth && fontSize > 18) {
                 fontSize -= 2; 
