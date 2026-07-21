@@ -29,11 +29,15 @@ const client = new Client({
 });
 
 // --- [تسجيل الخطوط] ---
-// 1. خط الروستر الجديد (Noto Serif)
+// 1. خط الروستر الأساسي (Noto Serif)
 const rosterFontPath = path.join(__dirname, 'src', 'templates', 'NotoSerif-VariableFont_wdth,wght.ttf');
 GlobalFonts.registerFromPath(rosterFontPath, 'Noto Serif');
 
-// 2. خط البطاقات (Bodoni FLF)
+// 2. خط اللغة العربية والرموز (اسم الملف كما هو في الصورة)
+const arabicFontPath = path.join(__dirname, 'src', 'templates', 'Cairo-VariableFont_slnt,wght.ttf');
+GlobalFonts.registerFromPath(arabicFontPath, 'Cairo');
+
+// 3. خط البطاقات (Bodoni FLF)
 const cardFontPath = path.join(__dirname, 'src', 'templates', 'BodoniFLF.ttf');
 GlobalFonts.registerFromPath(cardFontPath, 'Bodoni FLF');
 
@@ -179,7 +183,7 @@ async function updateRosterLive() {
         const attachments = []; 
         const embeds = [];
 
-        // 4. رسم البيانات على صور الروستر باستخدام خط Noto Serif
+        // 4. رسم البيانات على صور الروستر
         for (let c = 0; c < chunks.length; c++) {
             const currentChunk = chunks[c];
             const canvas = createCanvas(background.width, background.height);
@@ -187,8 +191,8 @@ async function updateRosterLive() {
             
             ctx.drawImage(background, 0, 0, canvas.width, canvas.height);
             
-            // استخدام خط الروستر الجديد Noto Serif
-            ctx.font = 'bold 22px "Noto Serif", sans-serif'; 
+            // استخدام Noto Serif مع Cairo كخط احتياطي للعربي والرموز
+            ctx.font = 'bold 22px "Noto Serif", "Cairo", sans-serif'; 
             ctx.shadowColor = 'rgba(0, 0, 0, 0.7)';
             ctx.shadowBlur = 4;
             ctx.shadowOffsetX = 2;
@@ -258,7 +262,7 @@ async function updateRosterLive() {
         }
 
         await message.edit({ embeds: embeds, files: attachments });
-        console.log("✅ تم تحديث الروستر بالأسماء والخط الجديد (Noto Serif) بنجاح!");
+        console.log("✅ تم تحديث الروستر بنجاح وقراءة جميع الأسماء بدون مربعات!");
 
     } catch (error) {
         console.error("❌ خطأ في أمر setuproster (تفصيلي):", error);
@@ -383,16 +387,15 @@ client.on(Events.InteractionCreate, async interaction => {
 
             ctx.fillStyle = currentRank.textColor; 
             let fontSize = 38; 
-            // استخدام خط Bodoni FLF للبطاقات
-            ctx.font = `bold ${fontSize}px "Bodoni FLF"`;
+            ctx.font = `bold ${fontSize}px "Bodoni FLF", "Cairo", sans-serif`;
             while (ctx.measureText(nickname).width > currentRank.username.maxWidth && fontSize > 18) {
                 fontSize -= 2; 
-                ctx.font = `bold ${fontSize}px "Bodoni FLF"`;
+                ctx.font = `bold ${fontSize}px "Bodoni FLF", "Cairo", sans-serif`;
             }
             ctx.fillText(nickname, currentRank.username.x, currentRank.username.y); 
 
             ctx.fillStyle = currentRank.idColor; 
-            ctx.font = '18px "Bodoni FLF"'; 
+            ctx.font = '18px "Bodoni FLF", "Cairo", sans-serif'; 
             ctx.fillText(`ID: ${discordId}`, currentRank.userId.x, currentRank.userId.y); 
 
             ctx.fillStyle = currentRank.textColor; 
