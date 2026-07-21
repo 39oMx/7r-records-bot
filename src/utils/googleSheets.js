@@ -3,7 +3,7 @@ require('dotenv').config();
 
 const SCOPES = ['https://www.googleapis.com/auth/spreadsheets.readonly'];
 
-// جلب بيانات تسجيل الدخول من متغيرات Railway مباشرة بدلاً من ملف JSON
+// الاتصال المباشر عبر متغيرات Railway وحذف الاعتماد على ملف الـ JSON
 const auth = new google.auth.GoogleAuth({
     credentials: {
         client_email: process.env.GOOGLE_CLIENT_EMAIL,
@@ -17,20 +17,24 @@ const sheets = google.sheets({ version: 'v4', auth });
 async function getAllPlayerData() {
     try {
         const spreadsheetId = process.env.GOOGLE_SHEET_ID;
-        const range = 'Sheet1!A2:F'; // تأكد أن اسم الشيت (Sheet1) مطابق لما لديك
+        
+        // ⚠️ تنبيه: تأكد أن اسم التبويب في أسفل جدول جوجل لديك هو Sheet1
+        const range = 'Sheet1!A2:F'; 
         
         const response = await sheets.spreadsheets.values.get({ spreadsheetId, range });
         const rows = response.data.values;
         
         const dataMap = new Map();
-        if (!rows || rows.length === 0) return dataMap;
+        if (!rows || rows.length === 0) {
+            console.log("⚠️ الجدول فارغ أو لم يتم العثور على بيانات.");
+            return dataMap;
+        }
         
         rows.forEach(row => {
-            // ترتيب الأعمدة: الآيدي، الاسم، الكيلز، الألعاب، الكي دي، الرتبة
             const [discord_id, name, kd, kills, games, rank] = row;
             if (discord_id) {
                 dataMap.set(discord_id.trim(), {
-                    id: discord_id,
+                    id: discord_id.trim(),
                     name: name || 'غير معروف',
                     kd: kd || '0',
                     kills: kills || '0',
@@ -42,8 +46,8 @@ async function getAllPlayerData() {
         
         return dataMap;
     } catch (error) {
-        console.error("❌ خطأ في قراءة جوجل شيت:", error.message);
-        throw error; // رمي الخطأ ليتم التقاطه في index.js
+        console.error("❌ خطأ أثناء قراءة البيانات من جوجل شيت:", error.message);
+        return new Map(); // إرجاع خريطة فارغة لحماية البوت من التعليق
     }
 }
 
