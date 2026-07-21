@@ -28,17 +28,9 @@ const client = new Client({
     ]
 });
 
-// 🛠️ --- [ دالة تحويل الزخارف والخطوط الخاصة إلى حروف قياسية ] ---
-function normalizeFancyText(text) {
-    if (!text) return '';
-    // تحويل رموز Unicode Fancy / Math إلى حروف إنجليزية وأرقام عادية يفهمها أي خط
-    return text.normalize('NFKD').replace(/[\u0300-\u036f]/g, '');
-}
-
-// --- [تسجيل الخطوط] ---
-// 1. خط الروستر الأساسي (Noto Serif)
-const rosterFontPath = path.join(__dirname, 'src', 'templates', 'NotoSerif-VariableFont_wdth,wght.ttf');
-GlobalFonts.registerFromPath(rosterFontPath, 'Noto Serif');
+// تحميل الخط الجديد
+const fontPath = path.join(__dirname, 'src', 'templates', 'PlayfairDisplay-VariableFont_wght.ttf');
+GlobalFonts.registerFromPath(fontPath, 'Playfair Display');
 // تحميل الخط الجديد
 const fontPath = path.join(__dirname, 'src', 'templates', 'PlayfairDisplay-VariableFont_wght.ttf');
 GlobalFonts.registerFromPath(fontPath, 'Playfair Display');
@@ -53,14 +45,6 @@ function sanitizeName(text) {
     return clean.length > 0 ? clean : 'Player';
 }
 // -------------------------------------------------------
-// 2. خط اللغة العربية والرموز الاحتياطي
-const arabicFontPath = path.join(__dirname, 'src', 'templates', 'Cairo-VariableFont_slnt,wght.ttf');
-GlobalFonts.registerFromPath(arabicFontPath, 'Cairo');
-
-// 3. خط البطاقات (Bodoni FLF)
-const cardFontPath = path.join(__dirname, 'src', 'templates', 'BodoniFLF.ttf');
-GlobalFonts.registerFromPath(cardFontPath, 'Bodoni FLF');
-
 // ⬇️ === [ أضف أيديهات الرتب والأسماء المخصصة هنا بالترتيب من الأعلى للأقل ] === ⬇️
 const CUSTOM_ROLES = [
     { id: '1150626780550533141', displayName: 'OWNER' },
@@ -117,50 +101,31 @@ const rankConfigurations = {
 };
 
 client.commands = new Collection();
-try {
-    const setupBulkCommand = require(path.join(__dirname, 'src', 'commands', 'setupbulk.js'));
-    client.commands.set(setupBulkCommand.data.name, setupBulkCommand);
-} catch (e) {
-    console.log("ℹ️ لم يتم العثور على أمر setupbulk أو تعذر تحميله.");
-}
+const setupBulkCommand = require(path.join(__dirname, 'src', 'commands', 'setupbulk.js'));
+client.commands.set(setupBulkCommand.data.name, setupBulkCommand);
 
 // --- [دالة التحديث الموحدة للروستر بالصور] ---
 async function updateRosterLive() {
-    console.log("🔄 [الروستر] بدأ تنفيذ عملية تحديث الروستر...");
     try {
         const channelId = process.env.ROSTER_CHANNEL_ID;
         const messageId = process.env.ROSTER_MESSAGE_ID;
         const teamRoleId = process.env.TEAM_ROLE_ID;
 
         if (!channelId || !messageId || !teamRoleId) {
-            console.error(`❌ [الروستر] خطأ: بعض متغيرات البيئة مفقودة:
-              - ROSTER_CHANNEL_ID: ${channelId ? '✅' : '❌ مفقود'}
-              - ROSTER_MESSAGE_ID: ${messageId ? '✅' : '❌ مفقود'}
-              - TEAM_ROLE_ID: ${teamRoleId ? '✅' : '❌ مفقود'}`);
+            console.log("⚠️ تنبيه: إعدادات الروستر (الايدي أو الروم) غير مكتملة في المتغيرات.");
             return;
         }
 
-        const channel = await client.channels.fetch(channelId).catch(err => {
-            console.error("❌ [الروستر] فشل جلب القناة:", err.message);
-            return null;
-        });
+        const channel = await client.channels.fetch(channelId);
         if (!channel) return;
 
-        const role = await channel.guild.roles.fetch(teamRoleId).catch(err => {
-            console.error("❌ [الروستر] فشل جلب الرتبة:", err.message);
-            return null;
-        });
+        const role = channel.guild.roles.cache.get(teamRoleId);
         if (!role) return;
 
-        const message = await channel.messages.fetch(messageId).catch(err => {
-            console.error("❌ [الروستر] فشل جلب الرسالة المحددة لتحديثها:", err.message);
-            return null;
-        });
+        const message = await channel.messages.fetch(messageId);
         if (!message) return;
 
-        console.log(`📊 [الروستر] جاري استخراج أعضاء الرتبة (${role.name}). العدد الحالي: ${role.members.size}`);
-
-        // 1. استخراج الأعضاء والنيكات داخل السيرفر ورتبهم
+        // 1. استخراج الأعضاء واستبدال الرتب بالأسماء المخصصة مع تحديد الأولوية
         const membersProcessed = [];
         Array.from(role.members.values()).forEach(member => {
             let matchedCustomRole = null;
@@ -186,9 +151,6 @@ async function updateRosterLive() {
                 if (highestNormalRole) roleNameToShow = highestNormalRole.name;
             }
 
-            // 💡 تحويل الاسم المزخرف إلى اسم قياسي نظيف
-            const cleanName = normalizeFancyText(member.displayName);
-
             membersProcessed.push({
                 member,
                 // جلب اسم العضو داخل السيرفر كأولوية (بعد التنظيف)
@@ -198,10 +160,10 @@ async function updateRosterLive() {
             });
         });
 
-        // 2. ترتيب اللاعبين حسب الأولوية
+        // 2. ترتيب اللاعبين
         membersProcessed.sort((a, b) => a.priorityIndex - b.priorityIndex);
 
-        // 3. تقسيم الأعضاء لسلامة الصور
+        // 3. تقسيم الأعضاء
         const chunkSize = 20;
         const chunks = [];
         for (let i = 0; i < membersProcessed.length; i += chunkSize) {
@@ -209,7 +171,6 @@ async function updateRosterLive() {
         }
 
         if (chunks.length === 0) {
-            console.log("ℹ️ [الروستر] لا يوجد أعضاء يحملون هذه الرتبة حالياً.");
             const embed = new EmbedBuilder()
                 .setTitle(`📋 قائمة أبطال فريق: ${role.name}`)
                 .setDescription('لا يوجد أعضاء يحملون هذه الرتبة حالياً.')
@@ -227,15 +188,15 @@ async function updateRosterLive() {
         const attachments = []; 
         const embeds = [];
 
-        // 4. رسم البيانات على صور الروستر
+        // 4. رسم البيانات على الصور
         for (let c = 0; c < chunks.length; c++) {
             const currentChunk = chunks[c];
             const canvas = createCanvas(background.width, background.height);
             const ctx = canvas.getContext('2d');
             
             ctx.drawImage(background, 0, 0, canvas.width, canvas.height);
-            
-            ctx.font = 'bold 22px "Noto Serif", "Cairo", sans-serif'; 
+            // استخدام الخط الجديد هنا للروستر
+            ctx.font = 'bold 22px "Playfair Display", sans-serif'; 
             ctx.shadowColor = 'rgba(0, 0, 0, 0.7)';
             ctx.shadowBlur = 4;
             ctx.shadowOffsetX = 2;
@@ -305,10 +266,10 @@ async function updateRosterLive() {
         }
 
         await message.edit({ embeds: embeds, files: attachments });
-        console.log("✅ [الروستر] تم تعديل الرسالة بنجاح وتحديث الصور في السيرفر!");
+        console.log("✅ تم تحديث الروستر بالأسماء المخصصة للرتب بنجاح!");
 
     } catch (error) {
-        console.error("❌ [الروستر] خطأ في تنفيذ دالة updateRosterLive:", error);
+        console.error("❌ خطأ في أمر setuproster (تفصيلي):", error);
     }
 }
 
@@ -316,7 +277,6 @@ client.on(Events.MessageCreate, async message => {
     if (!message.member || !message.member.permissions.has(PermissionFlagsBits.Administrator)) return;
 
     if (message.content === '!setup') {
-        console.log("📥 تم استقبال أمر !setup");
         const embed = new EmbedBuilder()
             .setTitle('⚔️ ميـدان الشـرف: بطاقـة المقاتـل')
             .setDescription(`**هل تعتقد أن إنجازاتك في الميدان تتحدث عن نفسها؟**\n\nالوقت قد حان لتعرف تصنيفك الحقيقي بين النخبة. لا مكان للصدفة، الأرقام هي التي تقرر من يستحق التاج ومن سيبقى في الظل.\n\n🛡️ **اضغط على الزر أدناه** لتكشف عن بطاقة إحصائياتك الشخصية، وتعرف ما إذا كان اسمك محفوراً ضمن أساطير القمة، أم أنك بحاجة للعودة للميدان وإثبات قوتك!`)
@@ -343,21 +303,19 @@ client.on(Events.MessageCreate, async message => {
     }
 
     if (message.content === '!setuproster') {
-        console.log("📥 تم استقبال أمر !setuproster من الإدارة");
         try {
             const TEAM_ROLE_ID = process.env.TEAM_ROLE_ID;
             const role = message.guild.roles.cache.get(TEAM_ROLE_ID);
             if (!role) {
-                console.error("❌ [أمر setuproster] لم يتم العثور على TEAM_ROLE_ID في كاش السيرفر.");
-                return message.reply('❌ لم يتم العثور على الرتبة المحددة. تأكد من إعداد TEAM_ROLE_ID في متغيرات الاستضافة.');
+                return message.reply('❌ لم يتم العثور على الرتبة المحددة. تأكد من إعداد TEAM_ROLE_ID.');
             }
 
-            message.reply('✅ جاري تحديث الروستر بالصور...').then(msg => setTimeout(() => msg.delete().catch(() => {}), 4000));
             await updateRosterLive(); 
+            message.reply('✅ جاري تحديث الروستر بالصور...').then(msg => setTimeout(() => msg.delete().catch(() => {}), 3000));
             await message.delete().catch(() => {});
             
-        } catch (error) {
-            console.error("❌ خطأ عند استقبال أمر !setuproster:", error);
+            } catch (error) {
+            console.error("❌ خطأ في أمر setuproster:", error);
             message.reply(`❌ خطأ: \`${error.message}\``);
         }
     }
@@ -368,7 +326,7 @@ client.on(Events.InteractionCreate, async interaction => {
         const command = client.commands.get(interaction.commandName);
         if (!command) return;
         try { await command.execute(interaction); } 
-        catch (error) { console.error("❌ خطأ في أمر التفاعل:", error); }
+        catch (error) { console.error(error); }
     }
 
     if (interaction.isButton() && interaction.customId === 'get_my_card') {
@@ -434,19 +392,20 @@ client.on(Events.InteractionCreate, async interaction => {
 
             ctx.fillStyle = currentRank.textColor; 
             let fontSize = 38; 
-            ctx.font = `bold ${fontSize}px "Bodoni FLF", "Cairo", sans-serif`;
+            // استخدام الخط الجديد هنا لتوليد البطاقات
+            ctx.font = `bold ${fontSize}px "Playfair Display"`;
             while (ctx.measureText(nickname).width > currentRank.username.maxWidth && fontSize > 18) {
                 fontSize -= 2; 
-                ctx.font = `bold ${fontSize}px "Bodoni FLF", "Cairo", sans-serif`;
+                ctx.font = `bold ${fontSize}px "Playfair Display"`;
             }
             ctx.fillText(nickname, currentRank.username.x, currentRank.username.y); 
 
             ctx.fillStyle = currentRank.idColor; 
-            ctx.font = '18px "Bodoni FLF", "Cairo", sans-serif'; 
+            ctx.font = '18px "Playfair Display"'; 
             ctx.fillText(`ID: ${discordId}`, currentRank.userId.x, currentRank.userId.y); 
 
             ctx.fillStyle = currentRank.textColor; 
-            ctx.font = 'bold 52px "Bodoni FLF"'; 
+            ctx.font = 'bold 52px "Playfair Display"'; 
             
             let displayKD = kdValue.toFixed(1); 
             ctx.fillText(displayKD, currentRank.kd.x, currentRank.kd.y); 
@@ -508,15 +467,13 @@ client.once(Events.ClientReady, async c => {
     console.log(`🚀 البوت شغال ومستعد للأتمتة باسم: ${c.user.tag}`);
 
     for (const guild of c.guilds.cache.values()) {
-        await guild.members.fetch().catch(e => console.error(`⚠️ فشل جلب أعضاء السيرفر ${guild.name}:`, e.message));
+        await guild.members.fetch();
     }
 
-    // تشغيل التحديث فوراً عند التشغيل
-    await updateRosterLive().catch(err => console.error("❌ خطأ في تحديث الروستر الأولي:", err));
+    await updateRosterLive();
     
-    // جدولة التحديث كل 5 دقائق
     setInterval(async () => {
-        await updateRosterLive().catch(err => console.error("❌ خطأ في التحديث الدوري للروستر:", err));
+        await updateRosterLive();
     }, 5 * 60 * 1000); 
 });
 
@@ -530,7 +487,7 @@ client.on(Events.GuildMemberUpdate, (oldMember, newMember) => {
     const hasRole = newMember.roles.cache.has(teamRoleId);
 
     if (hadRole !== hasRole) {
-        console.log(`🔄 رتبة الفريق تغيرت للعضو: ${newMember.user.tag} (جاري جدولة التحديث بعد 3 ثوانٍ...)`);
+        console.log(`🔄 رتبة الفريق تغيرت للعضو: ${newMember.user.tag} (جاري جدولة التحديث...)`);
         clearTimeout(rosterUpdateTimeout);
         rosterUpdateTimeout = setTimeout(() => updateRosterLive(), 3000);
     }
