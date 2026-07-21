@@ -157,15 +157,15 @@ async function updateRosterLive() {
             ctx.shadowOffsetY = 2;
 
             // الإحداثيات المضبوطة على قالب roster_bg.png
-            const leftColumnX_Num = 90;    
+            const leftColumnX_Num = 100;    
             const leftColumnX_Name = 230;  
             const leftColumnX_Role = 630;  
             
-            const rightColumnX_Num = 890;  
-            const rightColumnX_Name = 965; 
+            const rightColumnX_Num = 900;  
+            const rightColumnX_Name = 960; 
             const rightColumnX_Role = 1420; 
 
-            const startY = 410;            
+            const startY = 405;            
             const rowHeight = 42.5;        
 
             currentChunk.forEach((item, index) => {
