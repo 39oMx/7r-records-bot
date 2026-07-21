@@ -222,8 +222,9 @@ async function updateRosterLive() {
         console.log("✅ تم تحديث الروستر التسلسلي بالصور بنجاح وبشكل تلقائي!");
 
     } catch (error) {
-        console.error("❌ خطأ أثناء تحديث الروستر بالصور:", error);
-    }
+            console.error("❌ خطأ في أمر setuproster (تفصيلي):", error);
+            message.reply(`❌ خطأ: \`${error.message}\` — كود: \`${error.code || 'N/A'}\``);
+        }
 }
 
 // 1. أمر إنشاء واجهة التفاعل للإدارة (!setup) وأمر الروستر (!setuproster)
@@ -273,11 +274,11 @@ client.on(Events.MessageCreate, async message => {
             message.reply('✅ جاري تحديث الروستر بالصور...').then(msg => setTimeout(() => msg.delete().catch(() => {}), 3000));
             await message.delete().catch(() => {});
             
-        } catch (error) {
-            console.error("❌ خطأ في أمر setuproster:", error);
-            message.reply('❌ حدث خطأ أثناء تنفيذ أمر الروستر. تأكد من الصلاحيات.');
-        }
+            } catch (error) {
+        console.error("❌ خطأ أثناء تحديث الروستر بالصور:", error);
+        console.error("Full error:", JSON.stringify(error, Object.getOwnPropertyNames(error)));
     }
+}
 });
 
 // 2. التفاعل مع الأزرار والأوامر
