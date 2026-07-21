@@ -259,7 +259,7 @@ client.on(Events.InteractionCreate, async interaction => {
         for (const [id, data] of playerDataMap) {
             const gamesPlayed = parseInt(data.games) || 0;
             
-            if (gamesPlayed > 5) {
+            if (gamesPlayed > 4) {
                 const kills = parseInt(data.kills) || 0;
                 const kd = kills / gamesPlayed;
                 players.push({ id, kd }); 
