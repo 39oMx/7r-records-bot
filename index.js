@@ -104,29 +104,48 @@ const rankConfigurations = {
 };
 
 client.commands = new Collection();
-const setupBulkCommand = require(path.join(__dirname, 'src', 'commands', 'setupbulk.js'));
-client.commands.set(setupBulkCommand.data.name, setupBulkCommand);
+try {
+    const setupBulkCommand = require(path.join(__dirname, 'src', 'commands', 'setupbulk.js'));
+    client.commands.set(setupBulkCommand.data.name, setupBulkCommand);
+} catch (e) {
+    console.log("ℹ️ لم يتم العثور على أمر setupbulk أو تعذر تحميله.");
+}
 
 // --- [دالة التحديث الموحدة للروستر بالصور] ---
 async function updateRosterLive() {
+    console.log("🔄 [الروستر] بدأ تنفيذ عملية تحديث الروستر...");
     try {
         const channelId = process.env.ROSTER_CHANNEL_ID;
         const messageId = process.env.ROSTER_MESSAGE_ID;
         const teamRoleId = process.env.TEAM_ROLE_ID;
 
         if (!channelId || !messageId || !teamRoleId) {
-            console.log("⚠️ تنبيه: إعدادات الروستر (الايدي أو الروم) غير مكتملة في المتغيرات.");
+            console.error(`❌ [الروستر] خطأ: بعض متغيرات البيئة مفقودة:
+              - ROSTER_CHANNEL_ID: ${channelId ? '✅' : '❌ مفقود'}
+              - ROSTER_MESSAGE_ID: ${messageId ? '✅' : '❌ مفقود'}
+              - TEAM_ROLE_ID: ${teamRoleId ? '✅' : '❌ مفقود'}`);
             return;
         }
 
-        const channel = await client.channels.fetch(channelId);
+        const channel = await client.channels.fetch(channelId).catch(err => {
+            console.error("❌ [الروستر] فشل جلب القناة:", err.message);
+            return null;
+        });
         if (!channel) return;
 
-        const role = channel.guild.roles.cache.get(teamRoleId);
+        const role = await channel.guild.roles.fetch(teamRoleId).catch(err => {
+            console.error("❌ [الروستر] فشل جلب الرتبة:", err.message);
+            return null;
+        });
         if (!role) return;
 
-        const message = await channel.messages.fetch(messageId);
+        const message = await channel.messages.fetch(messageId).catch(err => {
+            console.error("❌ [الروستر] فشل جلب الرسالة المحددة لتحديثها:", err.message);
+            return null;
+        });
         if (!message) return;
+
+        console.log(`📊 [الروستر] جاري استخراج أعضاء الرتبة (${role.name}). العدد الحالي: ${role.members.size}`);
 
         // 1. استخراج الأعضاء والنيكات داخل السيرفر ورتبهم
         const membersProcessed = [];
@@ -176,6 +195,7 @@ async function updateRosterLive() {
         }
 
         if (chunks.length === 0) {
+            console.log("ℹ️ [الروستر] لا يوجد أعضاء يحملون هذه الرتبة حالياً.");
             const embed = new EmbedBuilder()
                 .setTitle(`📋 قائمة أبطال فريق: ${role.name}`)
                 .setDescription('لا يوجد أعضاء يحملون هذه الرتبة حالياً.')
@@ -271,10 +291,10 @@ async function updateRosterLive() {
         }
 
         await message.edit({ embeds: embeds, files: attachments });
-        console.log("✅ تم تحديث الروستر وتحويل الأسماء المزخرفة إلى حروف واضحة بنجاح!");
+        console.log("✅ [الروستر] تم تعديل الرسالة بنجاح وتحديث الصور في السيرفر!");
 
     } catch (error) {
-        console.error("❌ خطأ في أمر setuproster (تفصيلي):", error);
+        console.error("❌ [الروستر] خطأ في تنفيذ دالة updateRosterLive:", error);
     }
 }
 
@@ -282,6 +302,7 @@ client.on(Events.MessageCreate, async message => {
     if (!message.member || !message.member.permissions.has(PermissionFlagsBits.Administrator)) return;
 
     if (message.content === '!setup') {
+        console.log("📥 تم استقبال أمر !setup");
         const embed = new EmbedBuilder()
             .setTitle('⚔️ ميـدان الشـرف: بطاقـة المقاتـل')
             .setDescription(`**هل تعتقد أن إنجازاتك في الميدان تتحدث عن نفسها؟**\n\nالوقت قد حان لتعرف تصنيفك الحقيقي بين النخبة. لا مكان للصدفة، الأرقام هي التي تقرر من يستحق التاج ومن سيبقى في الظل.\n\n🛡️ **اضغط على الزر أدناه** لتكشف عن بطاقة إحصائياتك الشخصية، وتعرف ما إذا كان اسمك محفوراً ضمن أساطير القمة، أم أنك بحاجة للعودة للميدان وإثبات قوتك!`)
@@ -308,19 +329,21 @@ client.on(Events.MessageCreate, async message => {
     }
 
     if (message.content === '!setuproster') {
+        console.log("📥 تم استقبال أمر !setuproster من الإدارة");
         try {
             const TEAM_ROLE_ID = process.env.TEAM_ROLE_ID;
             const role = message.guild.roles.cache.get(TEAM_ROLE_ID);
             if (!role) {
-                return message.reply('❌ لم يتم العثور على الرتبة المحددة. تأكد من إعداد TEAM_ROLE_ID.');
+                console.error("❌ [أمر setuproster] لم يتم العثور على TEAM_ROLE_ID في كاش السيرفر.");
+                return message.reply('❌ لم يتم العثور على الرتبة المحددة. تأكد من إعداد TEAM_ROLE_ID في متغيرات الاستضافة.');
             }
 
+            message.reply('✅ جاري تحديث الروستر بالصور...').then(msg => setTimeout(() => msg.delete().catch(() => {}), 4000));
             await updateRosterLive(); 
-            message.reply('✅ جاري تحديث الروستر بالصور...').then(msg => setTimeout(() => msg.delete().catch(() => {}), 3000));
             await message.delete().catch(() => {});
             
-            } catch (error) {
-            console.error("❌ خطأ في أمر setuproster:", error);
+        } catch (error) {
+            console.error("❌ خطأ عند استقبال أمر !setuproster:", error);
             message.reply(`❌ خطأ: \`${error.message}\``);
         }
     }
@@ -331,7 +354,7 @@ client.on(Events.InteractionCreate, async interaction => {
         const command = client.commands.get(interaction.commandName);
         if (!command) return;
         try { await command.execute(interaction); } 
-        catch (error) { console.error(error); }
+        catch (error) { console.error("❌ خطأ في أمر التفاعل:", error); }
     }
 
     if (interaction.isButton() && interaction.customId === 'get_my_card') {
@@ -471,13 +494,15 @@ client.once(Events.ClientReady, async c => {
     console.log(`🚀 البوت شغال ومستعد للأتمتة باسم: ${c.user.tag}`);
 
     for (const guild of c.guilds.cache.values()) {
-        await guild.members.fetch();
+        await guild.members.fetch().catch(e => console.error(`⚠️ فشل جلب أعضاء السيرفر ${guild.name}:`, e.message));
     }
 
-    await updateRosterLive();
+    // تشغيل التحديث فوراً عند التشغيل
+    await updateRosterLive().catch(err => console.error("❌ خطأ في تحديث الروستر الأولي:", err));
     
+    // جدولة التحديث كل 5 دقائق
     setInterval(async () => {
-        await updateRosterLive();
+        await updateRosterLive().catch(err => console.error("❌ خطأ في التحديث الدوري للروستر:", err));
     }, 5 * 60 * 1000); 
 });
 
@@ -491,7 +516,7 @@ client.on(Events.GuildMemberUpdate, (oldMember, newMember) => {
     const hasRole = newMember.roles.cache.has(teamRoleId);
 
     if (hadRole !== hasRole) {
-        console.log(`🔄 رتبة الفريق تغيرت للعضو: ${newMember.user.tag} (جاري جدولة التحديث...)`);
+        console.log(`🔄 رتبة الفريق تغيرت للعضو: ${newMember.user.tag} (جاري جدولة التحديث بعد 3 ثوانٍ...)`);
         clearTimeout(rosterUpdateTimeout);
         rosterUpdateTimeout = setTimeout(() => updateRosterLive(), 3000);
     }
