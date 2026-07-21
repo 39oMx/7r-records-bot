@@ -3,7 +3,7 @@ const { createCanvas, loadImage, GlobalFonts } = require('@napi-rs/canvas');
 const path = require('path');
 require('dotenv').config();
 
-// --- [إعداد سيرفر الويب للاستضاف 24/7] ---
+// --- [إعداد سيرفر الويب للاستضافة 24/7] ---
 const express = require('express');
 const app = express();
 const port = process.env.PORT || 3000;
@@ -93,9 +93,10 @@ async function updateRosterLive() {
         const channel = await client.channels.fetch(channelId);
         if (!channel) return;
 
-       // تحديث كاش الأعضاء والرتب لضمان دقة البيانات
-       const role = channel.guild.roles.cache.get(teamRoleId);
-if (!role) return;
+        // تحديث كاش الأعضاء والرتب لضمان دقة البيانات
+        await channel.guild.members.fetch();
+        const role = await channel.guild.roles.fetch(teamRoleId);
+        if (!role) return;
 
         const message = await channel.messages.fetch(messageId);
         if (!message) return;
