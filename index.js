@@ -28,9 +28,14 @@ const client = new Client({
     ]
 });
 
-// تحميل الخط الجديد
-const fontPath = path.join(__dirname, 'src', 'templates', 'PlayfairDisplay-VariableFont_wght.ttf');
-GlobalFonts.registerFromPath(fontPath, 'Playfair Display');
+// --- [تسجيل الخطوط] ---
+// 1. خط الروستر الجديد
+const rosterFontPath = path.join(__dirname, 'src', 'templates', 'PlayfairDisplay-Italic-VariableFont_wght.ttf');
+GlobalFonts.registerFromPath(rosterFontPath, 'Playfair Display Italic');
+
+// 2. خط البطاقات (Bodoni FLF)
+const cardFontPath = path.join(__dirname, 'src', 'templates', 'BodoniFLF.ttf');
+GlobalFonts.registerFromPath(cardFontPath, 'Bodoni FLF');
 
 // ⬇️ === [ أضف أيديهات الرتب والأسماء المخصصة هنا بالترتيب من الأعلى للأقل ] === ⬇️
 const CUSTOM_ROLES = [
@@ -112,7 +117,7 @@ async function updateRosterLive() {
         const message = await channel.messages.fetch(messageId);
         if (!message) return;
 
-        // 1. استخراج الأعضاء واستبدال الرتب بالأسماء المخصصة مع تحديد الأولوية
+        // 1. استخراج الأعضاء والنيكات داخل السيرفر ورتبهم
         const membersProcessed = [];
         Array.from(role.members.values()).forEach(member => {
             let matchedCustomRole = null;
@@ -140,17 +145,16 @@ async function updateRosterLive() {
 
             membersProcessed.push({
                 member,
-                // جلب اسم العضو داخل السيرفر كأولوية
-                displayName: member.displayName,
+                displayName: member.displayName, // قراءة النيك نيم داخل السيرفر
                 roleName: roleNameToShow,
                 priorityIndex: priorityIndex
             });
         });
 
-        // 2. ترتيب اللاعبين
+        // 2. ترتيب اللاعبين حسب الأولوية
         membersProcessed.sort((a, b) => a.priorityIndex - b.priorityIndex);
 
-        // 3. تقسيم الأعضاء
+        // 3. تقسيم الأعضاء لسلامة الصور
         const chunkSize = 20;
         const chunks = [];
         for (let i = 0; i < membersProcessed.length; i += chunkSize) {
@@ -175,15 +179,16 @@ async function updateRosterLive() {
         const attachments = []; 
         const embeds = [];
 
-        // 4. رسم البيانات على الصور
+        // 4. رسم البيانات على صور الروستر باستخدام خط Playfair Display Italic
         for (let c = 0; c < chunks.length; c++) {
             const currentChunk = chunks[c];
             const canvas = createCanvas(background.width, background.height);
             const ctx = canvas.getContext('2d');
             
             ctx.drawImage(background, 0, 0, canvas.width, canvas.height);
-            // استخدام الخط الجديد هنا للروستر
-            ctx.font = 'bold 22px "Playfair Display", sans-serif'; 
+            
+            // استخدام خط الروستر الجديد هنا
+            ctx.font = 'bold 22px "Playfair Display Italic", sans-serif'; 
             ctx.shadowColor = 'rgba(0, 0, 0, 0.7)';
             ctx.shadowBlur = 4;
             ctx.shadowOffsetX = 2;
@@ -253,7 +258,7 @@ async function updateRosterLive() {
         }
 
         await message.edit({ embeds: embeds, files: attachments });
-        console.log("✅ تم تحديث الروستر بالأسماء المخصصة للرتب بنجاح!");
+        console.log("✅ تم تحديث الروستر بالأسماء والخط الجديد بنجاح!");
 
     } catch (error) {
         console.error("❌ خطأ في أمر setuproster (تفصيلي):", error);
@@ -348,7 +353,6 @@ client.on(Events.InteractionCreate, async interaction => {
             }
 
             const currentRank = rankConfigurations[determinedRank];
-            // جلب النيك نيم داخل السيرفر الخاص باللاعب في بطاقة الإحصائيات أيضاً
             const nickname = interaction.member ? interaction.member.displayName : (interaction.user.globalName || interaction.user.username);
             const avatarUrl = interaction.user.displayAvatarURL({ extension: 'png', size: 256 });
 
@@ -379,20 +383,20 @@ client.on(Events.InteractionCreate, async interaction => {
 
             ctx.fillStyle = currentRank.textColor; 
             let fontSize = 38; 
-            // استخدام الخط الجديد هنا لتوليد البطاقات
-            ctx.font = `bold ${fontSize}px "Playfair Display"`;
+            // استخدام خط Bodoni FLF للبطاقات حصراً
+            ctx.font = `bold ${fontSize}px "Bodoni FLF"`;
             while (ctx.measureText(nickname).width > currentRank.username.maxWidth && fontSize > 18) {
                 fontSize -= 2; 
-                ctx.font = `bold ${fontSize}px "Playfair Display"`;
+                ctx.font = `bold ${fontSize}px "Bodoni FLF"`;
             }
             ctx.fillText(nickname, currentRank.username.x, currentRank.username.y); 
 
             ctx.fillStyle = currentRank.idColor; 
-            ctx.font = '18px "Playfair Display"'; 
+            ctx.font = '18px "Bodoni FLF"'; 
             ctx.fillText(`ID: ${discordId}`, currentRank.userId.x, currentRank.userId.y); 
 
             ctx.fillStyle = currentRank.textColor; 
-            ctx.font = 'bold 52px "Playfair Display"'; 
+            ctx.font = 'bold 52px "Bodoni FLF"'; 
             
             let displayKD = kdValue.toFixed(1); 
             ctx.fillText(displayKD, currentRank.kd.x, currentRank.kd.y); 
