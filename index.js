@@ -94,8 +94,8 @@ async function updateRosterLive() {
         if (!channel) return;
 
        // تحديث كاش الأعضاء والرتب لضمان دقة البيانات
-        const role = await channel.guild.roles.fetch(teamRoleId);
-        if (!role) return;
+       const role = channel.guild.roles.cache.get(teamRoleId);
+if (!role) return;
 
         const message = await channel.messages.fetch(messageId);
         if (!message) return;
