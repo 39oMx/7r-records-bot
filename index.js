@@ -177,7 +177,7 @@ client.on(Events.InteractionCreate, async interaction => {
             if (gamesPlayed > 0) kdValue = killsCount / gamesPlayed; 
 
             let determinedRank = 'silver'; 
-            if (gamesPlayed > 5) {
+            if (gamesPlayed >= 5) {
                 if (kdValue >= 30.0) determinedRank = 'top';
                 else if (kdValue >= 20.0) determinedRank = 'iridescent';
                 else if (kdValue >= 15.0) determinedRank = 'crimson';
