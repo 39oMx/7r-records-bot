@@ -39,7 +39,20 @@ function normalizeFancyText(text) {
 // 1. خط الروستر الأساسي (Noto Serif)
 const rosterFontPath = path.join(__dirname, 'src', 'templates', 'NotoSerif-VariableFont_wdth,wght.ttf');
 GlobalFonts.registerFromPath(rosterFontPath, 'Noto Serif');
+// تحميل الخط الجديد
+const fontPath = path.join(__dirname, 'src', 'templates', 'PlayfairDisplay-VariableFont_wght.ttf');
+GlobalFonts.registerFromPath(fontPath, 'Playfair Display');
 
+// --- [دالة تنظيف الأسماء من اليونيكود المزخرف والرموز] ---
+function sanitizeName(text) {
+    if (!text) return '';
+    let clean = text.normalize('NFKD').replace(/[\u0300-\u036f]/g, '');
+    clean = clean.normalize('NFKC');
+    clean = clean.replace(/[^\x20-\x7EÀ-ÿ]/g, '');
+    clean = clean.replace(/\s+/g, ' ').trim();
+    return clean.length > 0 ? clean : 'Player';
+}
+// -------------------------------------------------------
 // 2. خط اللغة العربية والرموز الاحتياطي
 const arabicFontPath = path.join(__dirname, 'src', 'templates', 'Cairo-VariableFont_slnt,wght.ttf');
 GlobalFonts.registerFromPath(arabicFontPath, 'Cairo');
@@ -178,7 +191,8 @@ async function updateRosterLive() {
 
             membersProcessed.push({
                 member,
-                displayName: cleanName,
+                // جلب اسم العضو داخل السيرفر كأولوية (بعد التنظيف)
+                displayName: sanitizeName(member.displayName),
                 roleName: roleNameToShow,
                 priorityIndex: priorityIndex
             });
@@ -389,8 +403,8 @@ client.on(Events.InteractionCreate, async interaction => {
             }
 
             const currentRank = rankConfigurations[determinedRank];
-            const rawNickname = interaction.member ? interaction.member.displayName : (interaction.user.globalName || interaction.user.username);
-            const nickname = normalizeFancyText(rawNickname);
+            // جلب النيك نيم داخل السيرفر الخاص باللاعب في بطاقة الإحصائيات أيضاً (بعد التنظيف)
+            const nickname = sanitizeName(interaction.member ? interaction.member.displayName : (interaction.user.globalName || interaction.user.username));
             const avatarUrl = interaction.user.displayAvatarURL({ extension: 'png', size: 256 });
 
             const templatePath = path.join(__dirname, 'src', 'templates', currentRank.fileName);
