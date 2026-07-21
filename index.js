@@ -24,7 +24,7 @@ const client = new Client({
         GatewayIntentBits.Guilds, 
         GatewayIntentBits.GuildMessages, 
         GatewayIntentBits.MessageContent,
-        GatewayIntentBits.GuildMembers
+        GatewayIntentBits.GuildMembers // ضروري جداً لمراقبة تحديثات الأعضاء ورتبهم
     ]
 });
 
@@ -77,9 +77,51 @@ client.commands = new Collection();
 const setupBulkCommand = require(path.join(__dirname, 'src', 'commands', 'setupbulk.js'));
 client.commands.set(setupBulkCommand.data.name, setupBulkCommand);
 
+// --- [دالة التحديث الموحدة للروستر] ---
+async function updateRosterLive() {
+    try {
+        const channelId = process.env.ROSTER_CHANNEL_ID;
+        const messageId = process.env.ROSTER_MESSAGE_ID;
+        const teamRoleId = process.env.TEAM_ROLE_ID;
+
+        // التحقق من وجود المتغيرات
+        if (!channelId || !messageId || !teamRoleId) {
+            console.log("⚠️ تنبيه: إعدادات الروستر (الايدي أو الروم) غير مكتملة في المتغيرات.");
+            return;
+        }
+
+        const channel = await client.channels.fetch(channelId);
+        if (!channel) return;
+
+        // تحديث كاش الأعضاء والرتب لضمان دقة البيانات
+        await channel.guild.members.fetch();
+        const role = await channel.guild.roles.fetch(teamRoleId);
+        if (!role) return;
+
+        const message = await channel.messages.fetch(messageId);
+        if (!message) return;
+
+        // عمل منشن لكل عضو يحمل الرتبة
+        const membersList = role.members.map(m => `🔹 <@${m.id}>`).join('\n');
+
+        const embed = new EmbedBuilder()
+            .setTitle(`📋 قائمة أبطال فريق: ${role.name}`)
+            .setDescription(membersList || 'لا يوجد أعضاء يحملون هذه الرتبة حالياً.')
+            .setColor(role.hexColor || '#FF4500')
+            .setThumbnail(channel.guild.iconURL({ dynamic: true }))
+            .setFooter({ text: `آخر تحديث تلقائي للروستر: ${new Date().toLocaleTimeString('ar-EG')}` })
+            .setTimestamp();
+
+        // تحديث الرسالة الثابتة مسبقاً في الديسكورد
+        await message.edit({ embeds: [embed] });
+        console.log("✅ تم تحديث الروستر بنجاح وبشكل تلقائي!");
+    } catch (error) {
+        console.error("❌ خطأ أثناء تحديث الروستر تلقائياً:", error.message);
+    }
+}
+
 // 1. أمر إنشاء واجهة التفاعل للإدارة (!setup) وأمر الروستر (!setuproster)
 client.on(Events.MessageCreate, async message => {
-    // التأكد من أن المستخدم إداري
     if (!message.member || !message.member.permissions.has(PermissionFlagsBits.Administrator)) return;
 
     // --- أمر استخراج واجهة البطاقات ---
@@ -109,20 +151,17 @@ client.on(Events.MessageCreate, async message => {
         await message.delete().catch(() => {}); 
     }
 
-    // --- أمر استخراج قائمة الفريق (الروستر) ---
+    // --- أمر استخراج قائمة الفريق اليدوي ---
     if (message.content === '!setuproster') {
         try {
             const TEAM_ROLE_ID = process.env.TEAM_ROLE_ID;
-            
-            // جلب وتحديث كاش الأعضاء في السيرفر لضمان قراءة الجميع
             await message.guild.members.fetch();
 
             const role = message.guild.roles.cache.get(TEAM_ROLE_ID);
             if (!role) {
-                return message.reply('❌ لم يتم العثور على الرتبة المحددة. تأكد من إعداد TEAM_ROLE_ID في Railway.');
+                return message.reply('❌ لم يتم العثور على الرتبة المحددة. تأكد من إعداد TEAM_ROLE_ID.');
             }
 
-            // عمل منشن لكل عضو يحمل الرتبة
             const membersList = role.members.map(m => `🔹 <@${m.id}>`).join('\n');
 
             const embed = new EmbedBuilder()
@@ -151,9 +190,6 @@ client.on(Events.InteractionCreate, async interaction => {
         catch (error) { console.error(error); }
     }
 
-    // ==========================================
-    // زر استخراج البطاقة الفردية
-    // ==========================================
     if (interaction.isButton() && interaction.customId === 'get_my_card') {
         await interaction.deferReply({ ephemeral: true });
         
@@ -246,9 +282,6 @@ client.on(Events.InteractionCreate, async interaction => {
         }
     }
 
-    // ==========================================
-    // زر التفاعل مع "لوحة الصدارة" (> 5 أقيام حصرياً)
-    // ==========================================
     if (interaction.isButton() && interaction.customId === 'show_leaderboard') {
         await interaction.deferReply({ ephemeral: true });
 
@@ -258,7 +291,6 @@ client.on(Events.InteractionCreate, async interaction => {
         let players = [];
         for (const [id, data] of playerDataMap) {
             const gamesPlayed = parseInt(data.games) || 0;
-            
             if (gamesPlayed > 4) {
                 const kills = parseInt(data.kills) || 0;
                 const kd = kills / gamesPlayed;
@@ -274,7 +306,6 @@ client.on(Events.InteractionCreate, async interaction => {
         const top10 = players.slice(0, 10);
 
         let lbDescription = '🏆 **أفضل 10 مقاتلين في السيرفر:**\n*(حصرياً للمقاتلين الذين خاضوا أكثر من 5 معارك)*\n\n';
-        
         for (let i = 0; i < top10.length; i++) {
             const p = top10[i];
             const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : '🔹';
@@ -291,41 +322,32 @@ client.on(Events.InteractionCreate, async interaction => {
     }
 });
 
-client.once(Events.ClientReady, c => {
+// الأحداث عند جاهزية البوت والتحديثات الدائمة
+client.once(Events.ClientReady, async c => {
     console.log(`🚀 البوت شغال ومستعد للأتمتة باسم: ${c.user.tag}`);
+    
+    // 1️⃣ تحديث فوري ومباشر بمجرد إقلاع البوت وتلقيه الاتصال
+    await updateRosterLive();
+    
+    // 2️⃣ فحص دوري كل 5 دقائق كخط دفاع ثانٍ للأمان ومزامنة البيانات الثابتة
+    setInterval(async () => {
+        await updateRosterLive();
+    }, 5 * 60 * 1000); 
+});
+
+// 3️⃣ تحديث لحظي (Real-Time): عند تعديل رتب أي عضو بالسيرفر (إضافة/إزالة رتبة الروستر)
+client.on(Events.GuildMemberUpdate, async (oldMember, newMember) => {
+    const teamRoleId = process.env.TEAM_ROLE_ID;
+    if (!teamRoleId) return;
+
+    // مقارنة حالة الرتبة بين القديم والجديد لتقليل استهلاك الموارد
+    const hadRole = oldMember.roles.cache.has(teamRoleId);
+    const hasRole = newMember.roles.cache.has(teamRoleId);
+
+    if (hadRole !== hasRole) {
+        console.log(`🔄 رتبة الفريق تغيرت للعضو: ${newMember.user.tag} (جاري تحديث الروستر فوراً...)`);
+        await updateRosterLive();
+    }
 });
 
 client.login(process.env.DISCORD_TOKEN);
-// --- كود التحديث التلقائي للروستر ---
-client.on(Events.ClientReady, async () => {
-    console.log(`🚀 البوت جاهز، وسيبدأ التحديث التلقائي للروستر...`);
-    
-    // ضبط الوقت (كل 30 دقيقة = 1800000 ميلي ثانية)
-    setInterval(async () => {
-        try {
-            const channel = await client.channels.fetch(process.env.ROSTER_CHANNEL_ID);
-            if (!channel) return;
-
-            // جلب الرسالة التي نريد تحديثها (يجب أن نحدد ID الرسالة في ملف .env)
-            const message = await channel.messages.fetch(process.env.ROSTER_MESSAGE_ID);
-            
-            const role = channel.guild.roles.cache.get(process.env.TEAM_ROLE_ID);
-            await channel.guild.members.fetch(); // تحديث كاش الأعضاء
-
-            const membersList = role.members.map(m => `🔹 <@${m.id}>`).join('\n');
-
-            const embed = new EmbedBuilder()
-                .setTitle(`📋 قائمة أبطال فريق: ${role.name}`)
-                .setDescription(membersList || 'لا يوجد أعضاء حالياً.')
-                .setColor(role.hexColor || '#FF4500')
-                .setFooter({ text: `آخر تحديث تلقائي: ${new Date().toLocaleTimeString()}` });
-
-            // تحديث الرسالة الموجودة مسبقاً
-            await message.edit({ embeds: [embed] });
-            console.log("✅ تم تحديث الروستر تلقائياً!");
-            
-        } catch (error) {
-            console.error("❌ خطأ في التحديث التلقائي:", error);
-        }
-    }, 1800000); // 30 دقيقة
-});
