@@ -28,12 +28,19 @@ const client = new Client({
     ]
 });
 
+// 🛠️ --- [ دالة تحويل الزخارف والخطوط الخاصة إلى حروف قياسية ] ---
+function normalizeFancyText(text) {
+    if (!text) return '';
+    // تحويل رموز Unicode Fancy / Math إلى حروف إنجليزية وأرقام عادية يفهمها أي خط
+    return text.normalize('NFKD').replace(/[\u0300-\u036f]/g, '');
+}
+
 // --- [تسجيل الخطوط] ---
 // 1. خط الروستر الأساسي (Noto Serif)
 const rosterFontPath = path.join(__dirname, 'src', 'templates', 'NotoSerif-VariableFont_wdth,wght.ttf');
 GlobalFonts.registerFromPath(rosterFontPath, 'Noto Serif');
 
-// 2. خط اللغة العربية والرموز (اسم الملف كما هو في الصورة)
+// 2. خط اللغة العربية والرموز الاحتياطي
 const arabicFontPath = path.join(__dirname, 'src', 'templates', 'Cairo-VariableFont_slnt,wght.ttf');
 GlobalFonts.registerFromPath(arabicFontPath, 'Cairo');
 
@@ -147,9 +154,12 @@ async function updateRosterLive() {
                 if (highestNormalRole) roleNameToShow = highestNormalRole.name;
             }
 
+            // 💡 تحويل الاسم المزخرف إلى اسم قياسي نظيف
+            const cleanName = normalizeFancyText(member.displayName);
+
             membersProcessed.push({
                 member,
-                displayName: member.displayName,
+                displayName: cleanName,
                 roleName: roleNameToShow,
                 priorityIndex: priorityIndex
             });
@@ -191,7 +201,6 @@ async function updateRosterLive() {
             
             ctx.drawImage(background, 0, 0, canvas.width, canvas.height);
             
-            // استخدام Noto Serif مع Cairo كخط احتياطي للعربي والرموز
             ctx.font = 'bold 22px "Noto Serif", "Cairo", sans-serif'; 
             ctx.shadowColor = 'rgba(0, 0, 0, 0.7)';
             ctx.shadowBlur = 4;
@@ -262,7 +271,7 @@ async function updateRosterLive() {
         }
 
         await message.edit({ embeds: embeds, files: attachments });
-        console.log("✅ تم تحديث الروستر بنجاح وقراءة جميع الأسماء بدون مربعات!");
+        console.log("✅ تم تحديث الروستر وتحويل الأسماء المزخرفة إلى حروف واضحة بنجاح!");
 
     } catch (error) {
         console.error("❌ خطأ في أمر setuproster (تفصيلي):", error);
@@ -357,7 +366,8 @@ client.on(Events.InteractionCreate, async interaction => {
             }
 
             const currentRank = rankConfigurations[determinedRank];
-            const nickname = interaction.member ? interaction.member.displayName : (interaction.user.globalName || interaction.user.username);
+            const rawNickname = interaction.member ? interaction.member.displayName : (interaction.user.globalName || interaction.user.username);
+            const nickname = normalizeFancyText(rawNickname);
             const avatarUrl = interaction.user.displayAvatarURL({ extension: 'png', size: 256 });
 
             const templatePath = path.join(__dirname, 'src', 'templates', currentRank.fileName);
