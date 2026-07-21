@@ -3,11 +3,23 @@ require('dotenv').config();
 
 const SCOPES = ['https://www.googleapis.com/auth/spreadsheets.readonly'];
 
-// الاتصال المباشر عبر متغيرات Railway وحذف الاعتماد على ملف الـ JSON
+// 🔍 [نظام الفحص الذكي] - سيطبع حالة المتغيرات في شاشة Railway
+const clientEmail = process.env.GOOGLE_CLIENT_EMAIL;
+const privateKey = process.env.GOOGLE_PRIVATE_KEY;
+const sheetId = process.env.GOOGLE_SHEET_ID;
+
+console.log("-----------------------------------------");
+console.log("🔍 جاري فحص الربط مع متغيرات Railway...");
+console.log(`📧 الإيميل: ${clientEmail ? '✅ موجود' : '❌ غير موجود (يوجد خطأ في اسم المتغير)'}`);
+console.log(`🔑 المفتاح السري: ${privateKey ? '✅ موجود' : '❌ غير موجود'}`);
+console.log(`📊 آيدي الشيت: ${sheetId ? '✅ موجود' : '❌ غير موجود'}`);
+console.log("-----------------------------------------");
+
 const auth = new google.auth.GoogleAuth({
     credentials: {
-        client_email: process.env.GOOGLE_CLIENT_EMAIL,
-        private_key: process.env.GOOGLE_PRIVATE_KEY ? process.env.GOOGLE_PRIVATE_KEY.replace(/\\n/g, '\n') : undefined
+        client_email: clientEmail,
+        // معالجة الأسطر المخفية في المفتاح السري
+        private_key: privateKey ? privateKey.replace(/\\n/g, '\n') : undefined
     },
     scopes: SCOPES,
 });
@@ -16,19 +28,12 @@ const sheets = google.sheets({ version: 'v4', auth });
 
 async function getAllPlayerData() {
     try {
-        const spreadsheetId = process.env.GOOGLE_SHEET_ID;
-        
-        // ⚠️ تنبيه: تأكد أن اسم التبويب في أسفل جدول جوجل لديك هو Sheet1
         const range = 'Sheet1!A2:F'; 
-        
-        const response = await sheets.spreadsheets.values.get({ spreadsheetId, range });
+        const response = await sheets.spreadsheets.values.get({ spreadsheetId: sheetId, range });
         const rows = response.data.values;
         
         const dataMap = new Map();
-        if (!rows || rows.length === 0) {
-            console.log("⚠️ الجدول فارغ أو لم يتم العثور على بيانات.");
-            return dataMap;
-        }
+        if (!rows || rows.length === 0) return dataMap;
         
         rows.forEach(row => {
             const [discord_id, name, kd, kills, games, rank] = row;
@@ -47,7 +52,7 @@ async function getAllPlayerData() {
         return dataMap;
     } catch (error) {
         console.error("❌ خطأ أثناء قراءة البيانات من جوجل شيت:", error.message);
-        return new Map(); // إرجاع خريطة فارغة لحماية البوت من التعليق
+        throw error;
     }
 }
 
