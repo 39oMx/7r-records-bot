@@ -165,7 +165,7 @@ async function updateRosterLive() {
             const rightColumnX_Name = 965; 
             const rightColumnX_Role = 1420; 
 
-            const startY = 370;            
+            const startY = 410;            
             const rowHeight = 42.5;        
 
             currentChunk.forEach((item, index) => {
