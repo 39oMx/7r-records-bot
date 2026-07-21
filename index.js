@@ -24,13 +24,28 @@ const client = new Client({
         GatewayIntentBits.Guilds, 
         GatewayIntentBits.GuildMessages, 
         GatewayIntentBits.MessageContent,
-        GatewayIntentBits.GuildMembers // ضروري جداً لمراقبة تحديثات الأعضاء ورتبهم
+        GatewayIntentBits.GuildMembers 
     ]
 });
 
 // تحميل الخط
 const fontPath = path.join(__dirname, 'src', 'templates', 'BodoniFLF.ttf');
 GlobalFonts.registerFromPath(fontPath, 'Bodoni FLF');
+
+// ⬇️ === [ أضف أيديهات الرتب والأسماء المخصصة هنا بالترتيب من الأعلى للأقل ] === ⬇️
+const CUSTOM_ROLES = [
+    { id: '1150626780550533141', displayName: 'OWNER' },
+    { id: '1212529351396954162', displayName: 'CEO' },
+    { id: '1448335233278542027', displayName: 'RIGHT HAND' },
+    { id: '1400698234669633637', displayName: 'CLAN LEADER' },
+    { id: '1405670992025616394', displayName: 'ADMIN' },
+    { id: '1408511418478755850', displayName: 'HIGH STAFF' },
+    { id: '1515054401881112606', displayName: 'QUALITY CONTROL' },
+    { id: '1495722899204472872', displayName: 'RG LEADER' },
+    { id: '1524770799888633886', displayName: 'AMBASSADOR' },
+    { id: '1416430043655176262', displayName: '7R MEMBER' }    
+];
+// ⬆️ =================================================================== ⬆️
 
 // إعدادات إحداثيات وألوان البطاقات
 const rankConfigurations = {
@@ -72,7 +87,6 @@ const rankConfigurations = {
     }
 };
 
-// إعداد الأوامر المتاحة 
 client.commands = new Collection();
 const setupBulkCommand = require(path.join(__dirname, 'src', 'commands', 'setupbulk.js'));
 client.commands.set(setupBulkCommand.data.name, setupBulkCommand);
@@ -84,7 +98,6 @@ async function updateRosterLive() {
         const messageId = process.env.ROSTER_MESSAGE_ID;
         const teamRoleId = process.env.TEAM_ROLE_ID;
 
-        // التحقق من وجود المتغيرات
         if (!channelId || !messageId || !teamRoleId) {
             console.log("⚠️ تنبيه: إعدادات الروستر (الايدي أو الروم) غير مكتملة في المتغيرات.");
             return;
@@ -99,32 +112,53 @@ async function updateRosterLive() {
         const message = await channel.messages.fetch(messageId);
         if (!message) return;
 
-        // 1. استخراج الأعضاء مع جلب أعلى رول حقيقي لكل عضو (الفهرسة التلقائية)
-        const membersWithHighestRole = role.members.map(member => {
-            const validRoles = member.roles.cache
-                .filter(r => r.id !== channel.guild.id && !r.managed)
-                .sort((a, b) => b.position - a.position);
-            
-            const highestRole = validRoles.first();
-            return {
+        // 1. استخراج الأعضاء واستبدال الرتب بالأسماء المخصصة مع تحديد الأولوية
+        const membersProcessed = [];
+        role.members.forEach(member => {
+            let matchedCustomRole = null;
+            let priorityIndex = 999; // أولوية منخفضة كافتراضية
+
+            // البحث عن أول رتبة يمتلكها العضو من القائمة المحددة
+            for (let i = 0; i < CUSTOM_ROLES.length; i++) {
+                const roleConfig = CUSTOM_ROLES[i];
+                if (member.roles.cache.has(roleConfig.id)) {
+                    matchedCustomRole = roleConfig;
+                    priorityIndex = i; // رقم Index هو ترتيب الرتبة (0 هو الأعلى)
+                    break;
+                }
+            }
+
+            // تحديد الاسم المخصص للرتبة
+            let roleNameToShow = 'عضو';
+            if (matchedCustomRole) {
+                roleNameToShow = matchedCustomRole.displayName;
+            } else {
+                // إذا لم يملك رتبة من القائمة المحددة، نأخذ أعلى رتبة لديه
+                const highestNormalRole = member.roles.cache
+                    .filter(r => r.id !== channel.guild.id && !r.managed)
+                    .sort((a, b) => b.position - a.position)
+                    .first();
+                if (highestNormalRole) roleNameToShow = highestNormalRole.name;
+            }
+
+            membersProcessed.push({
                 member,
-                 displayName: member.user.globalName || member.user.username,
-                highestRoleName: highestRole ? highestRole.name : 'عضو',
-                rolePosition: highestRole ? highestRole.position : 0
-            };
+                displayName: member.user.globalName || member.user.username,
+                roleName: roleNameToShow,
+                priorityIndex: priorityIndex
+            });
         });
 
-        // 2. ترتيب اللاعبين تنازلياً من أعلى رتبة إلى أدناها
-        membersWithHighestRole.sort((a, b) => b.rolePosition - a.rolePosition);
+        // 2. ترتيب اللاعبين من الأعلى للأقل بناءً على ترتيب الرتب في قائمة CUSTOM_ROLES
+        membersProcessed.sort((a, b) => a.priorityIndex - b.priorityIndex);
 
         // 3. تقسيم الأعضاء إلى مجموعات (كل 20 لاعباً في صورة)
         const chunkSize = 20;
         const chunks = [];
-        for (let i = 0; i < membersWithHighestRole.length; i += chunkSize) {
-            chunks.push(membersWithHighestRole.slice(i, i + chunkSize));
+        for (let i = 0; i < membersProcessed.length; i += chunkSize) {
+            chunks.push(membersProcessed.slice(i, i + chunkSize));
         }
 
-        // في حال لم يكن هناك أعضاء
         if (chunks.length === 0) {
             const embed = new EmbedBuilder()
                 .setTitle(`📋 قائمة أبطال فريق: ${role.name}`)
@@ -137,13 +171,13 @@ async function updateRosterLive() {
             return;
         }
 
-        // مسار قالب الصورة
         const templatePath = path.join(__dirname, 'src', 'templates', 'roster_bg.png');
         const background = await loadImage(templatePath);
         
         const attachments = []; 
+        const embeds = [];
 
-        // 4. إنشاء الصور لكل مجموعة (Chunk)
+        // 4. رسم البيانات على الصور
         for (let c = 0; c < chunks.length; c++) {
             const currentChunk = chunks[c];
             const canvas = createCanvas(background.width, background.height);
@@ -156,7 +190,6 @@ async function updateRosterLive() {
             ctx.shadowOffsetX = 2;
             ctx.shadowOffsetY = 2;
 
-            // الإحداثيات المضبوطة على قالب roster_bg.png
             const leftColumnX_Num = 100;    
             const leftColumnX_Name = 230;  
             const leftColumnX_Role = 630;  
@@ -170,8 +203,6 @@ async function updateRosterLive() {
 
             currentChunk.forEach((item, index) => {
                 let xNum, xName, xRole, y;
-                
-                // حساب الرقم التسلسلي العام
                 const globalIndex = (c * 20) + index + 1;
 
                 if (index < 10) {
@@ -186,50 +217,59 @@ async function updateRosterLive() {
                     y = startY + ((index - 10) * rowHeight);
                 }
 
-                // رسم الرقم التسلسلي 
+                // كتابة الرقم التسلسلي
                 ctx.fillStyle = '#FF4444'; 
                 ctx.textAlign = 'right';
                 ctx.fillText(`${globalIndex}-`, xNum, y);
 
-                // رسم النيك نيم
+                // كتابة اسم اللاعب
                 ctx.fillStyle = '#FFFFFF';
                 ctx.textAlign = 'left';
                 let formattedName = item.displayName.length > 17 ? item.displayName.substring(0, 15) + '...' : item.displayName;
                 ctx.fillText(formattedName, xName, y);
 
-                // رسم الرتبة
+                // كتابة الاسم المخصص للرتبة
                 ctx.fillStyle = '#CCCCCC'; 
-                let formattedRole = item.highestRoleName.length > 15 ? item.highestRoleName.substring(0, 13) + '...' : item.highestRoleName;
+                let formattedRole = item.roleName.length > 15 ? item.roleName.substring(0, 13) + '...' : item.roleName;
                 ctx.fillText(formattedRole, xRole, y);
             });
 
+            const fileName = `roster_part_${c + 1}.png`;
             const buffer = await canvas.toBuffer('image/png');
-            attachments.push(new AttachmentBuilder(buffer, { name: `roster_part_${c + 1}.png` }));
+            attachments.push(new AttachmentBuilder(buffer, { name: fileName }));
+
+            // إنشاء Embed مستقل لكل صورة لضمان إرسالها أسفل بعضها البعض
+            const imgEmbed = new EmbedBuilder()
+                .setColor(role.hexColor || '#8B0000')
+                .setImage(`attachment://${fileName}`);
+
+            if (c === 0) {
+                imgEmbed.setTitle(`📋 قائمة أبطال فريق: ${role.name}`)
+                        .setDescription(`إجمالي أعضاء الفريق المسجلين: **${role.members.size}** لاعب`)
+                        .setThumbnail(channel.guild.iconURL({ dynamic: true }));
+            }
+
+            if (c === chunks.length - 1) {
+                imgEmbed.setFooter({ text: `آخر تحديث تلقائي: ${new Date().toLocaleTimeString('ar-EG')}` })
+                        .setTimestamp();
+            }
+
+            embeds.push(imgEmbed);
         }
 
-        // 5. تعديل الرسالة لتشمل جميع الصور
-        const embed = new EmbedBuilder()
-            .setTitle(`📋 قائمة أبطال فريق: ${role.name}`)
-            .setDescription(`إجمالي أعضاء الفريق المسجلين: **${role.members.size}** لاعب\n*يتم فهرسة اللاعبين تلقائياً حسب أعلى رتبة يمتلكونها.*`)
-            .setColor(role.hexColor || '#8B0000') 
-            .setThumbnail(channel.guild.iconURL({ dynamic: true }))
-            .setFooter({ text: `آخر تحديث تلقائي: ${new Date().toLocaleTimeString('ar-EG')}` })
-            .setTimestamp();
-
-        await message.edit({ embeds: [embed], files: attachments });
-        console.log("✅ تم تحديث الروستر التسلسلي بالصور بنجاح وبشكل تلقائي!");
+        // 5. تعديل الرسالة لتعرض الـ Embeds والصور رأسياً
+        await message.edit({ embeds: embeds, files: attachments });
+        console.log("✅ تم تحديث الروستر بالأسماء المخصصة للرتب بنجاح!");
 
     } catch (error) {
-            console.error("❌ خطأ في أمر setuproster (تفصيلي):", error);
-            message.reply(`❌ خطأ: \`${error.message}\` — كود: \`${error.code || 'N/A'}\``);
-        }
+        console.error("❌ خطأ في أمر setuproster (تفصيلي):", error);
+    }
 }
 
 // 1. أمر إنشاء واجهة التفاعل للإدارة (!setup) وأمر الروستر (!setuproster)
 client.on(Events.MessageCreate, async message => {
     if (!message.member || !message.member.permissions.has(PermissionFlagsBits.Administrator)) return;
 
-    // --- أمر استخراج واجهة البطاقات ---
     if (message.content === '!setup') {
         const embed = new EmbedBuilder()
             .setTitle('⚔️ ميـدان الشـرف: بطاقـة المقاتـل')
@@ -256,7 +296,6 @@ client.on(Events.MessageCreate, async message => {
         await message.delete().catch(() => {}); 
     }
 
-    // --- أمر استخراج قائمة الفريق اليدوي ---
     if (message.content === '!setuproster') {
         try {
             const TEAM_ROLE_ID = process.env.TEAM_ROLE_ID;
@@ -265,7 +304,6 @@ client.on(Events.MessageCreate, async message => {
                 return message.reply('❌ لم يتم العثور على الرتبة المحددة. تأكد من إعداد TEAM_ROLE_ID.');
             }
 
-            // لتشغيل الدالة المحدثة مباشرة عبر الأمر للتجربة
             await updateRosterLive(); 
             message.reply('✅ جاري تحديث الروستر بالصور...').then(msg => setTimeout(() => msg.delete().catch(() => {}), 3000));
             await message.delete().catch(() => {});
@@ -274,7 +312,7 @@ client.on(Events.MessageCreate, async message => {
             console.error("❌ خطأ في أمر setuproster:", error);
             message.reply(`❌ خطأ: \`${error.message}\``);
         }
-}
+    }
 });
 
 // 2. التفاعل مع الأزرار والأوامر
@@ -418,25 +456,20 @@ client.on(Events.InteractionCreate, async interaction => {
     }
 });
 
-// الأحداث عند جاهزية البوت والتحديثات الدائمة
 client.once(Events.ClientReady, async c => {
     console.log(`🚀 البوت شغال ومستعد للأتمتة باسم: ${c.user.tag}`);
 
-    // جلب الأعضاء مرة واحدة بس عند التشغيل
     for (const guild of c.guilds.cache.values()) {
         await guild.members.fetch();
     }
 
-    // 1️⃣ تحديث فوري ومباشر بمجرد إقلاع البوت وتلقيه الاتصال
     await updateRosterLive();
     
-    // 2️⃣ فحص دوري كل 5 دقائق كخط دفاع ثانٍ للأمان ومزامنة البيانات الثابتة
     setInterval(async () => {
         await updateRosterLive();
     }, 5 * 60 * 1000); 
 });
 
-// 3️⃣ تحديث لحظي (Real-Time): عند تعديل رتب أي عضو بالسيرفر (إضافة/إزالة رتبة الروستر)
 let rosterUpdateTimeout = null;
 
 client.on(Events.GuildMemberUpdate, (oldMember, newMember) => {
