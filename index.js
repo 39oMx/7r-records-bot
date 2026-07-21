@@ -192,10 +192,10 @@ async function updateRosterLive() {
 
             const leftColumnX_Num = 100;    
             const leftColumnX_Name = 230;  
-            const leftColumnX_Role = 630;  
+            const leftColumnX_Role = 600;  
             
-            const rightColumnX_Num = 900;  
-            const rightColumnX_Name = 960; 
+            const rightColumnX_Num = 910;  
+            const rightColumnX_Name = 990; 
             const rightColumnX_Role = 1420; 
 
             const startY = 405;            
