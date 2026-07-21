@@ -3,22 +3,21 @@ require('dotenv').config();
 
 const SCOPES = ['https://www.googleapis.com/auth/spreadsheets.readonly'];
 
-// 🔍 [نظام الفحص الذكي] - سيطبع حالة المتغيرات في شاشة Railway
-const clientEmail = process.env.GOOGLE_CLIENT_EMAIL;
-const privateKey = process.env.GOOGLE_PRIVATE_KEY;
-const sheetId = process.env.GOOGLE_SHEET_ID;
+// جلب البيانات مع دعم كافة الاحتمالات لأسماء المتغيرات في Railway
+const clientEmail = process.env.GOOGLE_CLIENT_EMAIL || process.env.CLIENT_EMAIL || process.env.EMAIL;
+const privateKey = process.env.GOOGLE_PRIVATE_KEY || process.env.PRIVATE_KEY;
+const sheetId = process.env.GOOGLE_SHEET_ID || process.env.SHEET_ID;
 
 console.log("-----------------------------------------");
-console.log("🔍 جاري فحص الربط مع متغيرات Railway...");
-console.log(`📧 الإيميل: ${clientEmail ? '✅ موجود' : '❌ غير موجود (يوجد خطأ في اسم المتغير)'}`);
-console.log(`🔑 المفتاح السري: ${privateKey ? '✅ موجود' : '❌ غير موجود'}`);
-console.log(`📊 آيدي الشيت: ${sheetId ? '✅ موجود' : '❌ غير موجود'}`);
+console.log("🔍 فحص الربط المحدث:");
+console.log(`📧 الإيميل: ${clientEmail ? '✅ تم العثور عليه' : '❌ مفقود'}`);
+console.log(`🔑 المفتاح السري: ${privateKey ? '✅ تم العثور عليه' : '❌ مفقود'}`);
+console.log(`📊 آيدي الشيت: ${sheetId ? '✅ تم العثور عليه' : '❌ مفقود'}`);
 console.log("-----------------------------------------");
 
 const auth = new google.auth.GoogleAuth({
     credentials: {
         client_email: clientEmail,
-        // معالجة الأسطر المخفية في المفتاح السري
         private_key: privateKey ? privateKey.replace(/\\n/g, '\n') : undefined
     },
     scopes: SCOPES,
