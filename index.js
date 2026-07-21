@@ -39,10 +39,11 @@ GlobalFonts.registerFromPath(fontPath, 'Playfair Display');
 function sanitizeName(text) {
     if (!text) return '';
     let clean = text.normalize('NFKD').replace(/[\u0300-\u036f]/g, '');
-    clean = clean.normalize('NFKC');
-    clean = clean.replace(/[^\x20-\x7EÀ-ÿ]/g, '');
+    // احتفظ فقط بـ: A-Z, a-z, 0-9, مسافة، وبعض علامات الترقيم البسيطة
+    clean = clean.replace(/[^A-Za-z0-9 _.\-]/g, '');
     clean = clean.replace(/\s+/g, ' ').trim();
     return clean.length > 0 ? clean : 'Player';
+}
 }
 // -------------------------------------------------------
 // ⬇️ === [ أضف أيديهات الرتب والأسماء المخصصة هنا بالترتيب من الأعلى للأقل ] === ⬇️
