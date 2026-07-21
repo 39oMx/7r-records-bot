@@ -3,16 +3,17 @@ require('dotenv').config();
 
 const SCOPES = ['https://www.googleapis.com/auth/spreadsheets.readonly'];
 
-// جلب البيانات مع دعم كافة الاحتمالات لأسماء المتغيرات في Railway
-const clientEmail = process.env.GOOGLE_CLIENT_EMAIL || process.env.CLIENT_EMAIL || process.env.EMAIL;
-const privateKey = process.env.GOOGLE_PRIVATE_KEY || process.env.PRIVATE_KEY;
+// 🔒 وضع بيانات الاتصال مباشرة هنا لتجاوز مشاكل Railway نهائياً
+const clientEmail = "id-r-sheets-reader@r-cards-bot.iam.gserviceaccount.com"
+const privateKey = `-----BEGIN PRIVATE KEY-----\nMIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQDqPYqznCO1csnQ\nuQ7t0xMB8nb+rQboK02HDyRX1ddt/iUpRRobGX1cHBND8q5SoFwSp9IJHGFqnKsV\nPmMupr2tj0djn+YlZ2inaoUf4lsoafG8ROk4QYS48VgdczwHMTSeieT+nrCOEQXf\nRqUlyroferRpMbjeTsKnT/aQ+1F+Phaez1Jfbs9KKah+40yvMUroDbXPLhjhkJzJ\nCzCfiClVDwLq2ryXqmI+HgCnUcwMnfmFuVctip4U1ZmgQK7bmBTANBPeDUqTiG0j\nLxO323nSvTjfp6QjzepJqJe+4XgnZ7ZyqPf/5qbbMk5YWNqjjs9hv/kBboPeKZl5\nq/U75YfNAgMBAAECggEAAJXSHGm7kRtqbI6FqSNFBBwxO4xA+WLbfv1L/elft0T4\nW+jju7JqMv0yYCmj6TEpAW85Fzq8lvq/rALqcqumbGk3kLQea+/yY7HgjDvh/Zus\nYJw6IfrsXuS8XLKfakDjjWWN/M1Qn6+TuIMgVwXLkesCTmJPh6yWLvQETacrY7t2\niMP+iVTlQ+hBf9hFtDsKddf8SXwS2veAz2RspnjDv75LkM0wK1QfjIP55KK9dGdp\nY84jyCUzCqQplDqCpDaA7XD8Gz1Te77Apz6ig/AoW7YjMiAIaj4EgP26TeVf+yVV\ngdYUr1KnvWLos/g6E64XLvD/L9da2dciivXzM+HUBQKBgQD3yuAKs8oaIp9DGmfT\nZfXa0TqmyKOxRVxl0+RYGLrCdwifXneVpB7USkov0Z9cc1w6ZW+bWurHvkJt5PvB\ntxkPBcYznvArmIs/IsCadXWon4C8keZ8qmlb3GEaxk/Fy3pSpeoKPIEYnr/qak8e\n46bxg4aqZKQWBBOEcUNMNmRptwKBgQDx/8DjgXMiRF+a6dkeDS2AqCo7zd3HNOtQ\nIuC2ssx6SDZfZtgb5OaoV9HnJ/miVI7o04vBKubTolf+l0k9qJVT/JQbEz11yP7B\n1rHJmt4HX2VWi0xEZvCBYm+tCqyGhWqLfQRpSAwq3P0bnzj4LLzh/L9yej4kaXt0\nXo3tcEqqmwKBgQC6Ulta0Mv0EPqOW4mchLt0WQVwKcgkYNJUYxr9P0MXPKhIJaFn\n7Oudl2rnQAlDXB8KbgGY4KlPnnmW5qqDg+kcyau6XxWawm5aAAixXAcnzx/fKxoT\nvZPRlgmSN3H+eb017jnojoxH9f67BksOIAIE8nBNKbXUNCZ03THMWc3xSwKBgB/M\n3+gFhr+mBHoy6JkOWkBh2MrrDo2y4okxTB41+LDI9Hws45Emzzin8alSk3dFbVIj\nGmZT4OlGmBGYh8NWd+kFc+Dq8lScCP4n3E0F0M9fNc3dmDQU4t3dtZcjo/A5b/rM\nftvm39JyH8CVd8ME/f0kXXQJpEjco6BzHGtrKiSpAoGBAOUyUmfF5hAMEitcAH6z\nq2SFSP7mbEA5uf8xFXSAmqob4043QDARivCBzLFdgJjdZLy7dV5tnL09pjFAs+YD\nEgF6JrTz+rktQG5qZnIBLF3Q83MoBMod8phlcI5LRJ2Fym5k+wRi/Zy1wzn/KEg0\nkTcUKnX6ch8ES0LQ9JdJcwpR\n-----END PRIVATE KEY-----\n'
+
 const sheetId = process.env.GOOGLE_SHEET_ID || process.env.SHEET_ID;
 
 console.log("-----------------------------------------");
-console.log("🔍 فحص الربط المحدث:");
-console.log(`📧 الإيميل: ${clientEmail ? '✅ تم العثور عليه' : '❌ مفقود'}`);
-console.log(`🔑 المفتاح السري: ${privateKey ? '✅ تم العثور عليه' : '❌ مفقود'}`);
-console.log(`📊 آيدي الشيت: ${sheetId ? '✅ تم العثور عليه' : '❌ مفقود'}`);
+console.log("🔍 فحص الربط المباشر:");
+console.log(`📧 الإيميل: ${clientEmail ? '✅ موجود' : '❌ مفقود'}`);
+console.log(`🔑 المفتاح السري: ${privateKey ? '✅ موجود' : '❌ مفقود'}`);
+console.log(`📊 آيدي الشيت: ${sheetId ? '✅ موجود' : '❌ مفقود'}`);
 console.log("-----------------------------------------");
 
 const auth = new google.auth.GoogleAuth({
