@@ -3,7 +3,7 @@ const { createCanvas, loadImage, GlobalFonts } = require('@napi-rs/canvas');
 const path = require('path');
 require('dotenv').config();
 
-// --- [إعداد سيرفر الويب للاستضافة 24/7] ---
+// --- [إعداد سيرفر الويب للاستضاف 24/7] ---
 const express = require('express');
 const app = express();
 const port = process.env.PORT || 3000;
