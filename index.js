@@ -156,17 +156,17 @@ async function updateRosterLive() {
             ctx.shadowOffsetX = 2;
             ctx.shadowOffsetY = 2;
 
-            // الإحداثيات (يمكنك تعديلها لاحقاً لضبطها 100% مع قالبك)
-            const leftColumnX_Num = 95;    
-            const leftColumnX_Name = 135;  
-            const leftColumnX_Role = 425;  
+            // الإحداثيات المضبوطة على قالب roster_bg.png
+            const leftColumnX_Num = 90;    
+            const leftColumnX_Name = 230;  
+            const leftColumnX_Role = 630;  
             
-            const rightColumnX_Num = 615;  
-            const rightColumnX_Name = 655; 
-            const rightColumnX_Role = 945; 
+            const rightColumnX_Num = 890;  
+            const rightColumnX_Name = 965; 
+            const rightColumnX_Role = 1420; 
 
-            const startY = 245;            
-            const rowHeight = 44.5;        
+            const startY = 340;            
+            const rowHeight = 42.5;        
 
             currentChunk.forEach((item, index) => {
                 let xNum, xName, xRole, y;
