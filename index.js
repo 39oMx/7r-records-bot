@@ -52,14 +52,14 @@ function saveRosterData(data) {
 }
 
 // --- [تسجيل الخطوط] ---
-// 1. خط البطاقات BodoniFLF
+// 1. خط بطاقات المستوى والإحصائيات Bodoni FLF
 const cardFontPath = path.join(__dirname, 'src', 'templates', 'BodoniFLF.ttf');
 GlobalFonts.registerFromPath(cardFontPath, 'Bodoni FLF');
 
-// 2. خط الروستر الثابت (Cairo أو Playfair)
-const rosterFontPath = path.join(__dirname, 'src', 'templates', 'Cairo-Bold.ttf');
+// 2. خط الروستر العربي/القياسي
+const rosterFontPath = path.join(__dirname, 'src', 'templates', 'PlayfairDisplay-VariableFont_wght.ttf');
 if (fs.existsSync(rosterFontPath)) {
-    GlobalFonts.registerFromPath(rosterFontPath, 'Cairo');
+    GlobalFonts.registerFromPath(rosterFontPath, 'Playfair Display');
 }
 
 // ⬇️ === [ أضف أيديهات الرتب والأسماء المخصصة هنا بالترتيب ] === ⬇️
@@ -249,7 +249,7 @@ async function updateRosterLive() {
             const ctx = canvas.getContext('2d');
             
             ctx.drawImage(background, 0, 0, canvas.width, canvas.height);
-            ctx.font = '22px "Cairo", "Playfair Display", sans-serif'; 
+            ctx.font = 'bold 22px "Playfair Display", sans-serif'; 
             ctx.shadowColor = 'rgba(0, 0, 0, 0.7)';
             ctx.shadowBlur = 4;
             ctx.shadowOffsetX = 2;
@@ -409,8 +409,8 @@ client.on(Events.InteractionCreate, async interaction => {
 
             const currentRank = rankConfigurations[determinedRank];
             
-            // 💡 استخدام اسم العضو الحقيقي في السيرفر كما هو دون تعديل
-            const nickname = interaction.member ? interaction.member.displayName : (interaction.user.globalName || interaction.user.username);
+            // 💡 اعتماد اسم حساب اللاعب الشخصي (Global Display Name أو Username)
+            const nickname = interaction.user.globalName || interaction.user.username;
             const avatarUrl = interaction.user.displayAvatarURL({ extension: 'png', size: 256 });
 
             const templatePath = path.join(__dirname, 'src', 'templates', currentRank.fileName);
@@ -438,7 +438,7 @@ client.on(Events.InteractionCreate, async interaction => {
             ctx.shadowOffsetX = 2; 
             ctx.shadowOffsetY = 2;
 
-            // 💡 اعتماد خط Bodoni FLF لرسم اسم اللاعب والإحصائيات
+            // 💡 تطبيـق خط Bodoni FLF للبطاقـات
             ctx.fillStyle = currentRank.textColor; 
             let fontSize = 38; 
             ctx.font = `bold ${fontSize}px "Bodoni FLF"`;
