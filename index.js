@@ -511,20 +511,52 @@ client.on(Events.InteractionCreate, async interaction => {
         await interaction.editReply({ embeds: [lbEmbed] });
     }
 
-    // 3. زر "إضافة إلى الروستر"
+    // 3. زر "إضافة إلى الروستر" (التحديث الجديد للفلترة)
     if (interaction.isButton() && interaction.customId === 'btn_roster_add') {
-        const userSelect = new UserSelectMenuBuilder()
+        const teamRoleId = process.env.TEAM_ROLE_ID;
+        
+        if (!teamRoleId) {
+            return interaction.reply({ content: '❌ رول الفريق غير معرف في الإعدادات.', ephemeral: true });
+        }
+
+        await interaction.guild.members.fetch().catch(() => {});
+        const teamRole = interaction.guild.roles.cache.get(teamRoleId);
+        
+        if (!teamRole) {
+            return interaction.reply({ content: '❌ لم يتم العثور على رول الفريق.', ephemeral: true });
+        }
+
+        const rosterData = getRosterData();
+        
+        // تصفية الأعضاء: جلب من يملك الرول + غير مسجل مسبقاً في الروستر
+        const unregisteredMembers = Array.from(teamRole.members.values()).filter(m => !rosterData[m.id]);
+
+        if (unregisteredMembers.length === 0) {
+            return interaction.reply({ content: '✅ جميع أعضاء الفريق تم تسجيلهم في الروستر بالفعل!', ephemeral: true });
+        }
+
+        const options = unregisteredMembers.slice(0, 25).map(member => {
+            return new StringSelectMenuOptionBuilder()
+                .setLabel(member.displayName)
+                .setDescription(`أيدي: ${member.id}`)
+                .setValue(member.id);
+        });
+
+        const stringSelect = new StringSelectMenuBuilder()
             .setCustomId('select_user_to_add')
             .setPlaceholder('اختر العضو المراد إضافته للروستر')
-            .setMinValues(1)
-            .setMaxValues(1);
+            .addOptions(options);
 
-        const row = new ActionRowBuilder().addComponents(userSelect);
-        await interaction.reply({ content: '👇 اختر العضو من القائمة التالية:', components: [row], ephemeral: true });
+        const row = new ActionRowBuilder().addComponents(stringSelect);
+        await interaction.reply({ 
+            content: '👇 اختر العضو من القائمة التالية (يظهر فقط أعضاء الفريق غير المسجلين):', 
+            components: [row], 
+            ephemeral: true 
+        });
     }
 
-    // 4. اختيار العضو من القائمة
-    if (interaction.isUserSelectMenu() && interaction.customId === 'select_user_to_add') {
+    // 4. اختيار العضو من القائمة (تم التعديل إلى StringSelectMenu)
+    if (interaction.isStringSelectMenu() && interaction.customId === 'select_user_to_add') {
         const selectedUserId = interaction.values[0];
 
         const modal = new ModalBuilder()
