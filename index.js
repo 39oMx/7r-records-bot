@@ -51,18 +51,16 @@ function saveRosterData(data) {
     fs.writeFileSync(rosterDataPath, JSON.stringify(data, null, 2));
 }
 
-// دالة تنظيف الأسماء البسيطة
-function sanitizeName(text) {
-    if (!text) return '';
-    let clean = text.normalize('NFKD').replace(/[\u0300-\u036f]/g, '');
-    clean = clean.replace(/[^A-Za-z0-9 _.\-]/g, '');
-    clean = clean.replace(/\s+/g, ' ').trim();
-    return clean.length > 0 ? clean : 'Player';
-}
+// --- [تسجيل الخطوط] ---
+// 1. خط البطاقات BodoniFLF
+const cardFontPath = path.join(__dirname, 'src', 'templates', 'BodoniFLF.ttf');
+GlobalFonts.registerFromPath(cardFontPath, 'Bodoni FLF');
 
-// تحميل الخط
-const fontPath = path.join(__dirname, 'src', 'templates', 'PlayfairDisplay-VariableFont_wght.ttf');
-GlobalFonts.registerFromPath(fontPath, 'Playfair Display');
+// 2. خط الروستر الثابت (Cairo أو Playfair)
+const rosterFontPath = path.join(__dirname, 'src', 'templates', 'Cairo-Bold.ttf');
+if (fs.existsSync(rosterFontPath)) {
+    GlobalFonts.registerFromPath(rosterFontPath, 'Cairo');
+}
 
 // ⬇️ === [ أضف أيديهات الرتب والأسماء المخصصة هنا بالترتيب ] === ⬇️
 const CUSTOM_ROLES = [
@@ -90,7 +88,7 @@ const rankConfigurations = {
 
 client.commands = new Collection();
 
-// --- [دالة تحديث لوحة التحكم مع حماية تجاوز الحد المسموح] ---
+// --- [دالة تحديث لوحة التحكم] ---
 async function updateControlPanel(guild) {
     try {
         const controlChannelId = process.env.ROSTER_CONTROL_CHANNEL_ID;
@@ -114,7 +112,6 @@ async function updateControlPanel(guild) {
         const unregistered = teamMembers.filter(m => !rosterData[m.id]);
         const registered = teamMembers.filter(m => rosterData[m.id]);
 
-        // معالجة نص غير المسجلين والتحقق من عدم تجاوز 1024 حرفاً
         let unregisteredText = unregistered.length > 0 
             ? unregistered.map(m => `<@${m.id}>`).join(' • ') 
             : '✅ جميع أعضاء الفريق مسجلون بالكامل!';
@@ -123,7 +120,6 @@ async function updateControlPanel(guild) {
             unregisteredText = unregisteredText.substring(0, 900) + `\n...وغيرهم (**+${unregistered.length}** لاعب)`;
         }
 
-        // معالجة نص المسجلين والتحقق من عدم تجاوز 1024 حرفاً
         let registeredText = registered.length > 0 
             ? registered.map(m => `<@${m.id}> ➔ **${rosterData[m.id]}**`).join('\n') 
             : '⚠️ لا يوجد أعضاء مسجلون حالياً.';
@@ -187,7 +183,6 @@ async function updateRosterLive() {
 
         const rosterData = getRosterData();
 
-        // 1. تصفية الأعضاء المسجلين فقط
         const membersProcessed = [];
         Array.from(role.members.values()).forEach(member => {
             if (rosterData[member.id]) {
@@ -223,10 +218,8 @@ async function updateRosterLive() {
             }
         });
 
-        // 2. ترتيب اللاعبين
         membersProcessed.sort((a, b) => a.priorityIndex - b.priorityIndex);
 
-        // 3. تقسيم الأعضاء لصور
         const chunkSize = 20;
         const chunks = [];
         for (let i = 0; i < membersProcessed.length; i += chunkSize) {
@@ -256,7 +249,7 @@ async function updateRosterLive() {
             const ctx = canvas.getContext('2d');
             
             ctx.drawImage(background, 0, 0, canvas.width, canvas.height);
-            ctx.font = 'bold 22px "Playfair Display", sans-serif'; 
+            ctx.font = '22px "Cairo", "Playfair Display", sans-serif'; 
             ctx.shadowColor = 'rgba(0, 0, 0, 0.7)';
             ctx.shadowBlur = 4;
             ctx.shadowOffsetX = 2;
@@ -317,7 +310,6 @@ async function updateRosterLive() {
         await message.edit({ embeds: embeds, files: attachments });
         console.log("✅ تم تحديث صورة الروستر بنجاح!");
 
-        // تحديث لوحة التحكم تلقائياً
         await updateControlPanel(channel.guild);
 
     } catch (error) {
@@ -416,7 +408,9 @@ client.on(Events.InteractionCreate, async interaction => {
             }
 
             const currentRank = rankConfigurations[determinedRank];
-            const nickname = sanitizeName(interaction.member ? interaction.member.displayName : (interaction.user.globalName || interaction.user.username));
+            
+            // 💡 استخدام اسم العضو الحقيقي في السيرفر كما هو دون تعديل
+            const nickname = interaction.member ? interaction.member.displayName : (interaction.user.globalName || interaction.user.username);
             const avatarUrl = interaction.user.displayAvatarURL({ extension: 'png', size: 256 });
 
             const templatePath = path.join(__dirname, 'src', 'templates', currentRank.fileName);
@@ -444,21 +438,22 @@ client.on(Events.InteractionCreate, async interaction => {
             ctx.shadowOffsetX = 2; 
             ctx.shadowOffsetY = 2;
 
+            // 💡 اعتماد خط Bodoni FLF لرسم اسم اللاعب والإحصائيات
             ctx.fillStyle = currentRank.textColor; 
             let fontSize = 38; 
-            ctx.font = `bold ${fontSize}px "Playfair Display"`;
+            ctx.font = `bold ${fontSize}px "Bodoni FLF"`;
             while (ctx.measureText(nickname).width > currentRank.username.maxWidth && fontSize > 18) {
                 fontSize -= 2; 
-                ctx.font = `bold ${fontSize}px "Playfair Display"`;
+                ctx.font = `bold ${fontSize}px "Bodoni FLF"`;
             }
             ctx.fillText(nickname, currentRank.username.x, currentRank.username.y); 
 
             ctx.fillStyle = currentRank.idColor; 
-            ctx.font = '18px "Playfair Display"'; 
+            ctx.font = '18px "Bodoni FLF"'; 
             ctx.fillText(`ID: ${discordId}`, currentRank.userId.x, currentRank.userId.y); 
 
             ctx.fillStyle = currentRank.textColor; 
-            ctx.font = 'bold 52px "Playfair Display"'; 
+            ctx.font = 'bold 52px "Bodoni FLF"'; 
             
             let displayKD = kdValue.toFixed(1); 
             ctx.fillText(displayKD, currentRank.kd.x, currentRank.kd.y); 
