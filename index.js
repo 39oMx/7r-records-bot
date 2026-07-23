@@ -512,7 +512,7 @@ client.on(Events.InteractionCreate, async interaction => {
     }
 
     // 3. زر "إضافة إلى الروستر" (التحديث الجديد للفلترة)
-  // 3. زر "إضافة إلى الروستر" (محدث لمنع انتهاء المهلة وتجاوز حد 25)
+    // 3. زر "إضافة إلى الروستر" (محدث لمنع انتهاء المهلة وتجاوز حد 25)
     if (interaction.isButton() && interaction.customId === 'btn_roster_add') {
         await interaction.deferReply({ ephemeral: true });
 
