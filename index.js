@@ -120,8 +120,9 @@ async function updateControlPanel(guild) {
             unregisteredText = unregisteredText.substring(0, 900) + `\n...وغيرهم (**+${unregistered.length}** لاعب)`;
         }
 
+        // 💡 إظهار الاسم المسجل فقط بدون منشن الحساب
         let registeredText = registered.length > 0 
-            ? registered.map(m => `<@${m.id}> ➔ **${rosterData[m.id]}**`).join('\n') 
+            ? registered.map(m => `• **${rosterData[m.id]}**`).join('\n') 
             : '⚠️ لا يوجد أعضاء مسجلون حالياً.';
 
         if (registeredText.length > 950) {
@@ -409,7 +410,7 @@ client.on(Events.InteractionCreate, async interaction => {
 
             const currentRank = rankConfigurations[determinedRank];
             
-            // 💡 أخذ الاسم من الروستر أولاً، وإذا لم يكن مسجلاً يأخذ اسم حسابه الشخصي
+            // أخذ الاسم من الروستر أولاً، وإذا لم يكن مسجلاً يأخذ اسم حسابه الشخصي
             const rosterData = getRosterData();
             const nickname = rosterData[discordId] || interaction.user.globalName || interaction.user.username;
             
@@ -440,7 +441,7 @@ client.on(Events.InteractionCreate, async interaction => {
             ctx.shadowOffsetX = 2; 
             ctx.shadowOffsetY = 2;
 
-            // 💡 طباعة اسم الروستر باستخدام خط Bodoni FLF
+            // طباعة اسم الروستر باستخدام خط Bodoni FLF
             ctx.fillStyle = currentRank.textColor; 
             let fontSize = 38; 
             ctx.font = `bold ${fontSize}px "Bodoni FLF"`;
