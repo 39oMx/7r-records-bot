@@ -33,34 +33,31 @@ const client = new Client({
     ]
 });
 
-// --- [إدارة بيانات الروستر المحفوظة محلياً] ---
+// --- [إدارة بيانات الروستر والإعدادات المحفوظة محلياً] ---
 const rosterDataPath = path.join(__dirname, 'roster_data.json');
+const configPath = path.join(__dirname, 'config.json');
 
 function getRosterData() {
-    if (!fs.existsSync(rosterDataPath)) {
-        fs.writeFileSync(rosterDataPath, JSON.stringify({}));
-    }
-    try {
-        return JSON.parse(fs.readFileSync(rosterDataPath, 'utf8'));
-    } catch (e) {
-        return {};
-    }
+    if (!fs.existsSync(rosterDataPath)) fs.writeFileSync(rosterDataPath, JSON.stringify({}));
+    try { return JSON.parse(fs.readFileSync(rosterDataPath, 'utf8')); } catch (e) { return {}; }
 }
 
 function saveRosterData(data) {
     fs.writeFileSync(rosterDataPath, JSON.stringify(data, null, 2));
 }
 
-// --- [تسجيل الخطوط] ---
-// 1. خط بطاقات المستوى والإحصائيات Bodoni FLF
-const cardFontPath = path.join(__dirname, 'src', 'templates', 'BodoniFLF.ttf');
-GlobalFonts.registerFromPath(cardFontPath, 'Bodoni FLF');
-
-// 2. خط الروستر العربي/القياسي
-const rosterFontPath = path.join(__dirname, 'src', 'templates', 'PlayfairDisplay-VariableFont_wght.ttf');
-if (fs.existsSync(rosterFontPath)) {
-    GlobalFonts.registerFromPath(rosterFontPath, 'Playfair Display');
+function getConfig() {
+    if (!fs.existsSync(configPath)) fs.writeFileSync(configPath, JSON.stringify({}));
+    try { return JSON.parse(fs.readFileSync(configPath, 'utf8')); } catch (e) { return {}; }
 }
+
+function saveConfig(data) {
+    fs.writeFileSync(configPath, JSON.stringify(data, null, 2));
+}
+
+// --- [تسجيل الخط الموحد Bodoni FLF للكل] ---
+const fontPath = path.join(__dirname, 'src', 'templates', 'BodoniFLF.ttf');
+GlobalFonts.registerFromPath(fontPath, 'Bodoni FLF');
 
 // ⬇️ === [ أضف أيديهات الرتب والأسماء المخصصة هنا بالترتيب ] === ⬇️
 const CUSTOM_ROLES = [
@@ -76,7 +73,6 @@ const CUSTOM_ROLES = [
     { id: '1416430043655176262', displayName: '7R MEMBER' }    
 ];
 
-// إعدادات إحداثيات البطاقات
 const rankConfigurations = {
     silver: { fileName: 'silver.png', textColor: '#FFFFFF', idColor: '#CCCCCC', avatar: { x: 280, y: 411, r: 131 }, username: { x: 720, y: 610, maxWidth: 450 }, userId: { x: 720, y: 700 }, kd: { x: 256, y: 995 }, kills: { x: 513, y: 995 }, games: { x: 774, y: 995 } },
     gold: { fileName: 'gold.png', textColor: '#FFFFFF', idColor: '#FFD700', avatar: { x: 319, y: 401, r: 127 }, username: { x: 685, y: 690, maxWidth: 450 }, userId: { x: 690, y: 760 }, kd: { x: 283, y: 995 }, kills: { x: 513, y: 995 }, games: { x: 745, y: 995 } },
@@ -91,8 +87,9 @@ client.commands = new Collection();
 // --- [دالة تحديث لوحة التحكم] ---
 async function updateControlPanel(guild) {
     try {
-        const controlChannelId = process.env.ROSTER_CONTROL_CHANNEL_ID;
-        const controlMessageId = process.env.ROSTER_CONTROL_MESSAGE_ID;
+        const config = getConfig();
+        const controlChannelId = config.ROSTER_CONTROL_CHANNEL_ID || process.env.ROSTER_CONTROL_CHANNEL_ID;
+        const controlMessageId = config.ROSTER_CONTROL_MESSAGE_ID || process.env.ROSTER_CONTROL_MESSAGE_ID;
         const teamRoleId = process.env.TEAM_ROLE_ID;
 
         if (!controlChannelId || !controlMessageId || !teamRoleId) return;
@@ -102,6 +99,8 @@ async function updateControlPanel(guild) {
 
         const message = await channel.messages.fetch(controlMessageId).catch(() => null);
         if (!message) return;
+
+        await guild.members.fetch().catch(() => {});
 
         const role = guild.roles.cache.get(teamRoleId);
         if (!role) return;
@@ -120,7 +119,6 @@ async function updateControlPanel(guild) {
             unregisteredText = unregisteredText.substring(0, 900) + `\n...وغيرهم (**+${unregistered.length}** لاعب)`;
         }
 
-        // 💡 إظهار الاسم المسجل فقط بدون منشن الحساب
         let registeredText = registered.length > 0 
             ? registered.map(m => `• **${rosterData[m.id]}**`).join('\n') 
             : '⚠️ لا يوجد أعضاء مسجلون حالياً.';
@@ -158,6 +156,7 @@ async function updateControlPanel(guild) {
         );
 
         await message.edit({ embeds: [embed], components: [row] });
+        console.log("⚙️ تم تحديث لوحة التحكم بنجاح!");
 
     } catch (error) {
         console.error("❌ خطأ أثناء تحديث لوحة التحكم:", error);
@@ -250,7 +249,9 @@ async function updateRosterLive() {
             const ctx = canvas.getContext('2d');
             
             ctx.drawImage(background, 0, 0, canvas.width, canvas.height);
-            ctx.font = 'bold 22px "Playfair Display", sans-serif'; 
+            
+            // 💡 استخدام خط Bodoni FLF لرسم صورة الروستر
+            ctx.font = 'bold 22px "Bodoni FLF"'; 
             ctx.shadowColor = 'rgba(0, 0, 0, 0.7)';
             ctx.shadowBlur = 4;
             ctx.shadowOffsetX = 2;
@@ -311,10 +312,8 @@ async function updateRosterLive() {
         await message.edit({ embeds: embeds, files: attachments });
         console.log("✅ تم تحديث صورة الروستر بنجاح!");
 
-        await updateControlPanel(channel.guild);
-
     } catch (error) {
-        console.error("❌ خطأ أثناء تحديث الروستر:", error);
+        console.error("❌ خطأ أثناء تحديث صورة الروستر:", error);
     }
 }
 
@@ -355,12 +354,11 @@ client.on(Events.MessageCreate, async message => {
             .setColor('#FF4500');
 
         const msg = await message.channel.send({ embeds: [embed] });
-        process.env.ROSTER_CONTROL_CHANNEL_ID = message.channel.id;
-        process.env.ROSTER_CONTROL_MESSAGE_ID = msg.id;
-
-        console.log(`📌 أضف هذه القيم في متغيرات الاستضافة:
-ROSTER_CONTROL_CHANNEL_ID=${message.channel.id}
-ROSTER_CONTROL_MESSAGE_ID=${msg.id}`);
+        
+        const config = getConfig();
+        config.ROSTER_CONTROL_CHANNEL_ID = message.channel.id;
+        config.ROSTER_CONTROL_MESSAGE_ID = msg.id;
+        saveConfig(config);
 
         await updateControlPanel(message.guild);
         await message.delete().catch(() => {});
@@ -368,7 +366,8 @@ ROSTER_CONTROL_MESSAGE_ID=${msg.id}`);
 
     if (message.content === '!setuproster') {
         await updateRosterLive(); 
-        message.reply('✅ تم تحديث الروستر بالكامل!').then(msg => setTimeout(() => msg.delete().catch(() => {}), 3000));
+        await updateControlPanel(message.guild);
+        message.reply('✅ تم تحديث الروستر واللوحة بالكامل!').then(msg => setTimeout(() => msg.delete().catch(() => {}), 3000));
         await message.delete().catch(() => {});
     }
 });
@@ -410,7 +409,6 @@ client.on(Events.InteractionCreate, async interaction => {
 
             const currentRank = rankConfigurations[determinedRank];
             
-            // أخذ الاسم من الروستر أولاً، وإذا لم يكن مسجلاً يأخذ اسم حسابه الشخصي
             const rosterData = getRosterData();
             const nickname = rosterData[discordId] || interaction.user.globalName || interaction.user.username;
             
@@ -441,7 +439,6 @@ client.on(Events.InteractionCreate, async interaction => {
             ctx.shadowOffsetX = 2; 
             ctx.shadowOffsetY = 2;
 
-            // طباعة اسم الروستر باستخدام خط Bodoni FLF
             ctx.fillStyle = currentRank.textColor; 
             let fontSize = 38; 
             ctx.font = `bold ${fontSize}px "Bodoni FLF"`;
@@ -559,6 +556,7 @@ client.on(Events.InteractionCreate, async interaction => {
 
         await interaction.editReply({ content: `✅ تم تسجيل اللاعب <@${targetUserId}> باسم **${customName}** وتحديث الروستر!` });
         
+        await updateControlPanel(interaction.guild);
         await updateRosterLive();
     }
 
@@ -598,12 +596,14 @@ client.on(Events.InteractionCreate, async interaction => {
 
         await interaction.editReply({ content: `🗑️ تم حذف **${removedName}** من الروستر وإعادته لقائمة غير المسجلين.` });
 
+        await updateControlPanel(interaction.guild);
         await updateRosterLive();
     }
 
     // 8. زر تحديث اللوحة يدويًا
     if (interaction.isButton() && interaction.customId === 'btn_roster_refresh') {
         await interaction.deferUpdate();
+        await updateControlPanel(interaction.guild);
         await updateRosterLive();
     }
 });
@@ -614,28 +614,46 @@ client.once(Events.ClientReady, async c => {
 
     for (const guild of c.guilds.cache.values()) {
         await guild.members.fetch().catch(() => {});
+        await updateControlPanel(guild);
     }
 
     await updateRosterLive();
     
     // تحديث دوري كل 5 دقائق
     setInterval(async () => {
+        for (const guild of client.guilds.cache.values()) {
+            await updateControlPanel(guild);
+        }
         await updateRosterLive();
     }, 5 * 60 * 1000); 
 });
 
+// --- [متابعة تغييرات الرتب وإزالة العضو تلقائياً عند سحب رتبة الفريق] ---
 let rosterUpdateTimeout = null;
 
-client.on(Events.GuildMemberUpdate, (oldMember, newMember) => {
+client.on(Events.GuildMemberUpdate, async (oldMember, newMember) => {
     const teamRoleId = process.env.TEAM_ROLE_ID;
     if (!teamRoleId) return;
 
     const hadRole = oldMember.roles.cache.has(teamRoleId);
     const hasRole = newMember.roles.cache.has(teamRoleId);
 
+    // 💡 إذا تمت إزالة رتبة الفريق من العضو -> يتم حذفه من ملف الروستر فوراً
+    if (hadRole && !hasRole) {
+        const rosterData = getRosterData();
+        if (rosterData[newMember.id]) {
+            delete rosterData[newMember.id];
+            saveRosterData(rosterData);
+            console.log(`🗑️ تم إزالة ${newMember.user.tag} من الروستر تلقائياً بسبب سحب رتبة الفريق.`);
+        }
+    }
+
     if (hadRole !== hasRole) {
         clearTimeout(rosterUpdateTimeout);
-        rosterUpdateTimeout = setTimeout(() => updateRosterLive(), 3000);
+        rosterUpdateTimeout = setTimeout(async () => {
+            await updateControlPanel(newMember.guild);
+            await updateRosterLive();
+        }, 3000);
     }
 });
 
