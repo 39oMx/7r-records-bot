@@ -33,7 +33,7 @@ const client = new Client({
     ]
 });
 
-// --- [إدارة بيانات الروستر المحفوظة] ---
+// --- [إدارة بيانات الروستر المحفوظة محلياً] ---
 const rosterDataPath = path.join(__dirname, 'roster_data.json');
 
 function getRosterData() {
@@ -49,6 +49,15 @@ function getRosterData() {
 
 function saveRosterData(data) {
     fs.writeFileSync(rosterDataPath, JSON.stringify(data, null, 2));
+}
+
+// دالة تنظيف الأسماء البسيطة
+function sanitizeName(text) {
+    if (!text) return '';
+    let clean = text.normalize('NFKD').replace(/[\u0300-\u036f]/g, '');
+    clean = clean.replace(/[^A-Za-z0-9 _.\-]/g, '');
+    clean = clean.replace(/\s+/g, ' ').trim();
+    return clean.length > 0 ? clean : 'Player';
 }
 
 // تحميل الخط
@@ -81,7 +90,7 @@ const rankConfigurations = {
 
 client.commands = new Collection();
 
-// --- [دالة تحديث لوحة التحكم Control Panel] ---
+// --- [دالة تحديث لوحة التحكم مع حماية تجاوز الحد المسموح] ---
 async function updateControlPanel(guild) {
     try {
         const controlChannelId = process.env.ROSTER_CONTROL_CHANNEL_ID;
@@ -105,20 +114,30 @@ async function updateControlPanel(guild) {
         const unregistered = teamMembers.filter(m => !rosterData[m.id]);
         const registered = teamMembers.filter(m => rosterData[m.id]);
 
+        // معالجة نص غير المسجلين والتحقق من عدم تجاوز 1024 حرفاً
         let unregisteredText = unregistered.length > 0 
             ? unregistered.map(m => `<@${m.id}>`).join(' • ') 
             : '✅ جميع أعضاء الفريق مسجلون بالكامل!';
 
+        if (unregisteredText.length > 950) {
+            unregisteredText = unregisteredText.substring(0, 900) + `\n...وغيرهم (**+${unregistered.length}** لاعب)`;
+        }
+
+        // معالجة نص المسجلين والتحقق من عدم تجاوز 1024 حرفاً
         let registeredText = registered.length > 0 
             ? registered.map(m => `<@${m.id}> ➔ **${rosterData[m.id]}**`).join('\n') 
             : '⚠️ لا يوجد أعضاء مسجلون حالياً.';
 
+        if (registeredText.length > 950) {
+            registeredText = registeredText.substring(0, 900) + `\n...وغيرهم (**+${registered.length}** لاعب)`;
+        }
+
         const embed = new EmbedBuilder()
             .setTitle('⚙️ لوحة تحكم الروستر (Roster Management)')
-            .setDescription('يمكنك التحكم بالأعضاء الظاهرين في صورة الروستر لتفادي مشكلة المربارات والأسماء المزخرفة.')
+            .setDescription('يمكنك التحكم بالأعضاء الظاهرين في صورة الروستر لتفادي مشكلة المربعات والأسماء المزخرفة.')
             .addFields(
                 { name: `📌 الأسماء الغير مسجلة في الروستر (${unregistered.length})`, value: unregisteredText },
-                { name: `✅ الأسماء المسجلة حالياً (${registered.length})`, value: registeredText.substring(0, 1024) }
+                { name: `✅ الأسماء المسجلة حالياً (${registered.length})`, value: registeredText }
             )
             .setColor('#FF4500')
             .setFooter({ text: `آخر تحديث: ${new Date().toLocaleTimeString('ar-EG')}` });
@@ -168,10 +187,9 @@ async function updateRosterLive() {
 
         const rosterData = getRosterData();
 
-        // 1. تصفية الأعضاء المسجلين فقط في الروستر
+        // 1. تصفية الأعضاء المسجلين فقط
         const membersProcessed = [];
         Array.from(role.members.values()).forEach(member => {
-            // نأخذ فقط من تم تسجيل اسمه يدويًا
             if (rosterData[member.id]) {
                 let matchedCustomRole = null;
                 let priorityIndex = 999; 
@@ -198,7 +216,7 @@ async function updateRosterLive() {
 
                 membersProcessed.push({
                     member,
-                    displayName: rosterData[member.id], // الاسم المعتمد الخالي من المربعات
+                    displayName: rosterData[member.id], 
                     roleName: roleNameToShow,
                     priorityIndex: priorityIndex
                 });
@@ -299,7 +317,7 @@ async function updateRosterLive() {
         await message.edit({ embeds: embeds, files: attachments });
         console.log("✅ تم تحديث صورة الروستر بنجاح!");
 
-        // تحديث لوحة التحكم
+        // تحديث لوحة التحكم تلقائياً
         await updateControlPanel(channel.guild);
 
     } catch (error) {
@@ -307,11 +325,36 @@ async function updateRosterLive() {
     }
 }
 
-// --- [الأوامر واستقبال الرسائل] ---
+// --- [استقبال الأوامر النصية] ---
 client.on(Events.MessageCreate, async message => {
     if (!message.member || !message.member.permissions.has(PermissionFlagsBits.Administrator)) return;
 
-    // أمر إنشاء لوحة تحكم الروستر
+    if (message.content === '!setup') {
+        const embed = new EmbedBuilder()
+            .setTitle('⚔️ ميـدان الشـرف: بطاقـة المقاتـل')
+            .setDescription(`**هل تعتقد أن إنجازاتك في الميدان تتحدث عن نفسها؟**\n\nالوقت قد حان لتعرف تصنيفك الحقيقي بين النخبة. لا مكان للصدفة، الأرقام هي التي تقرر من يستحق التاج ومن سيبقى في الظل.\n\n🛡️ **اضغط على الزر أدناه** لتكشف عن بطاقة إحصائياتك الشخصية، وتعرف ما إذا كان اسمك محفوراً ضمن أساطير القمة، أم أنك بحاجة للعودة للميدان وإثبات قوتك!`)
+            .setColor('#FF4500') 
+            .setThumbnail(client.user.displayAvatarURL())
+            .setFooter({ text: 'إدارة السيرفر - نظام الإحصائيات الذكي' });
+
+        const row = new ActionRowBuilder()
+            .addComponents(
+                new ButtonBuilder()
+                    .setCustomId('get_my_card')
+                    .setLabel('اكشف عن مستواك!')
+                    .setStyle(ButtonStyle.Danger)
+                    .setEmoji('🔥'),
+                new ButtonBuilder()
+                    .setCustomId('show_leaderboard')
+                    .setLabel('لوحة الصدارة')
+                    .setStyle(ButtonStyle.Secondary)
+                    .setEmoji('🏆')
+            );
+
+        await message.channel.send({ embeds: [embed], components: [row] });
+        await message.delete().catch(() => {}); 
+    }
+
     if (message.content === '!setuprostercontrol') {
         const embed = new EmbedBuilder()
             .setTitle('⚙️ لوحة تحكم الروستر')
@@ -322,7 +365,7 @@ client.on(Events.MessageCreate, async message => {
         process.env.ROSTER_CONTROL_CHANNEL_ID = message.channel.id;
         process.env.ROSTER_CONTROL_MESSAGE_ID = msg.id;
 
-        console.log(`📌 أضف هذه القيم في ملف .env:
+        console.log(`📌 أضف هذه القيم في متغيرات الاستضافة:
 ROSTER_CONTROL_CHANNEL_ID=${message.channel.id}
 ROSTER_CONTROL_MESSAGE_ID=${msg.id}`);
 
@@ -332,15 +375,148 @@ ROSTER_CONTROL_MESSAGE_ID=${msg.id}`);
 
     if (message.content === '!setuproster') {
         await updateRosterLive(); 
-        message.reply('✅ تم التحديث!').then(msg => setTimeout(() => msg.delete().catch(() => {}), 3000));
+        message.reply('✅ تم تحديث الروستر بالكامل!').then(msg => setTimeout(() => msg.delete().catch(() => {}), 3000));
         await message.delete().catch(() => {});
     }
 });
 
-// --- [معالجة أزرار وقوائم التفاعل] ---
+// --- [معالجة الأزرار والقوائم والتفاعلات] ---
 client.on(Events.InteractionCreate, async interaction => {
 
-    // 1. الضغط على زر "إضافة إلى الروستر"
+    // 1. زر "كشف البطاقة"
+    if (interaction.isButton() && interaction.customId === 'get_my_card') {
+        await interaction.deferReply({ ephemeral: true });
+        
+        const discordId = interaction.user.id;
+        const playerDataMap = await getAllPlayerData();
+        
+        if (!playerDataMap || playerDataMap.size === 0) {
+            return interaction.editReply('❌ النظام غير قادر على جلب البيانات حالياً. تواصل مع الإدارة.');
+        }
+
+        const data = playerDataMap.get(discordId);
+        if (!data) {
+            return interaction.editReply('❌ عذراً، لم أتمكن من العثور على إحصائياتك في قاعدة البيانات. تأكد من تسجيلك.');
+        }
+
+        try {
+            const killsCount = parseInt(data.kills) || 0;
+            const gamesPlayed = parseInt(data.games) || 0;
+            
+            let kdValue = 0;
+            if (gamesPlayed > 0) kdValue = killsCount / gamesPlayed; 
+
+            let determinedRank = 'silver'; 
+            if (gamesPlayed >= 5) {
+                if (kdValue >= 30.0) determinedRank = 'top';
+                else if (kdValue >= 20.0) determinedRank = 'iridescent';
+                else if (kdValue >= 15.0) determinedRank = 'crimson';
+                else if (kdValue >= 10.0) determinedRank = 'platinum';
+                else determinedRank = 'gold';
+            }
+
+            const currentRank = rankConfigurations[determinedRank];
+            const nickname = sanitizeName(interaction.member ? interaction.member.displayName : (interaction.user.globalName || interaction.user.username));
+            const avatarUrl = interaction.user.displayAvatarURL({ extension: 'png', size: 256 });
+
+            const templatePath = path.join(__dirname, 'src', 'templates', currentRank.fileName);
+            const background = await loadImage(templatePath);
+            const canvas = createCanvas(background.width, background.height);
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(background, 0, 0, canvas.width, canvas.height);
+
+            let avatar;
+            try { avatar = await loadImage(avatarUrl); } 
+            catch (e) { avatar = await loadImage('https://discord.com/assets/6f26effa10b40736e3e5.png'); }
+
+            const avCoords = currentRank.avatar;
+            ctx.save(); 
+            ctx.beginPath(); 
+            ctx.arc(avCoords.x, avCoords.y, avCoords.r, 0, Math.PI * 2, true); 
+            ctx.closePath(); 
+            ctx.clip();
+            ctx.drawImage(avatar, avCoords.x - avCoords.r, avCoords.y - avCoords.r, avCoords.r * 2, avCoords.r * 2); 
+            ctx.restore();
+
+            ctx.textAlign = 'center';  
+            ctx.shadowColor = 'rgba(0, 0, 0, 0.4)'; 
+            ctx.shadowBlur = 4; 
+            ctx.shadowOffsetX = 2; 
+            ctx.shadowOffsetY = 2;
+
+            ctx.fillStyle = currentRank.textColor; 
+            let fontSize = 38; 
+            ctx.font = `bold ${fontSize}px "Playfair Display"`;
+            while (ctx.measureText(nickname).width > currentRank.username.maxWidth && fontSize > 18) {
+                fontSize -= 2; 
+                ctx.font = `bold ${fontSize}px "Playfair Display"`;
+            }
+            ctx.fillText(nickname, currentRank.username.x, currentRank.username.y); 
+
+            ctx.fillStyle = currentRank.idColor; 
+            ctx.font = '18px "Playfair Display"'; 
+            ctx.fillText(`ID: ${discordId}`, currentRank.userId.x, currentRank.userId.y); 
+
+            ctx.fillStyle = currentRank.textColor; 
+            ctx.font = 'bold 52px "Playfair Display"'; 
+            
+            let displayKD = kdValue.toFixed(1); 
+            ctx.fillText(displayKD, currentRank.kd.x, currentRank.kd.y); 
+            ctx.fillText(killsCount.toString(), currentRank.kills.x, currentRank.kills.y); 
+            ctx.fillText(gamesPlayed.toString(), currentRank.games.x, currentRank.games.y); 
+
+            const buffer = canvas.toBuffer('image/png');
+            const attachment = new AttachmentBuilder(buffer, { name: `${nickname}-${determinedRank}.png` });
+
+            await interaction.editReply({ content: `👑 تم استخراج بطاقتك بنجاح!`, files: [attachment] });
+
+        } catch (singleError) {
+            console.error(`❌ خطأ أثناء توليد البطاقة:`, singleError);
+            return interaction.editReply('❌ حدث خطأ أثناء تجهيز بطاقتك. حاول مرة أخرى لاحقاً.');
+        }
+    }
+
+    // 2. زر "لوحة الصدارة"
+    if (interaction.isButton() && interaction.customId === 'show_leaderboard') {
+        await interaction.deferReply({ ephemeral: true });
+
+        const playerDataMap = await getAllPlayerData();
+        if (!playerDataMap || playerDataMap.size === 0) return interaction.editReply('❌ لا توجد بيانات متاحة حالياً.');
+
+        let players = [];
+        for (const [id, data] of playerDataMap) {
+            const gamesPlayed = parseInt(data.games) || 0;
+            if (gamesPlayed > 4) {
+                const kills = parseInt(data.kills) || 0;
+                const kd = kills / gamesPlayed;
+                players.push({ id, kd }); 
+            }
+        }
+
+        if (players.length === 0) {
+            return interaction.editReply('❌ لا يوجد لاعبون مؤهلون للوحة الصدارة حالياً (يجب لعب أكثر من 5 أقيام).');
+        }
+
+        players.sort((a, b) => b.kd - a.kd);
+        const top10 = players.slice(0, 10);
+
+        let lbDescription = '🏆 **أفضل 10 مقاتلين في السيرفر:**\n*(حصرياً للمقاتلين الذين خاضوا أكثر من 5 معارك)*\n\n';
+        for (let i = 0; i < top10.length; i++) {
+            const p = top10[i];
+            const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : '🔹';
+            lbDescription += `${medal} **${i + 1}.** <@${p.id}> | KD: **${p.kd.toFixed(2)}**\n`;
+        }
+
+        const lbEmbed = new EmbedBuilder()
+            .setTitle('📊 لوحة صدارة الأساطير')
+            .setDescription(lbDescription)
+            .setColor('#FFD700')
+            .setFooter({ text: 'استمر في القتال لتصعد للقمة!' });
+
+        await interaction.editReply({ embeds: [lbEmbed] });
+    }
+
+    // 3. زر "إضافة إلى الروستر"
     if (interaction.isButton() && interaction.customId === 'btn_roster_add') {
         const userSelect = new UserSelectMenuBuilder()
             .setCustomId('select_user_to_add')
@@ -352,7 +528,7 @@ client.on(Events.InteractionCreate, async interaction => {
         await interaction.reply({ content: '👇 اختر العضو من القائمة التالية:', components: [row], ephemeral: true });
     }
 
-    // 2. اختيار العضو من القائمة لإضافته
+    // 4. اختيار العضو من القائمة
     if (interaction.isUserSelectMenu() && interaction.customId === 'select_user_to_add') {
         const selectedUserId = interaction.values[0];
 
@@ -373,7 +549,7 @@ client.on(Events.InteractionCreate, async interaction => {
         await interaction.showModal(modal);
     }
 
-    // 3. تقديم النماذج (Modal Submission)
+    // 5. استقبال إدخال الاسم المخصص (Modal)
     if (interaction.isModalSubmit() && interaction.customId.startsWith('modal_add_roster_')) {
         await interaction.deferReply({ ephemeral: true });
         const targetUserId = interaction.customId.replace('modal_add_roster_', '');
@@ -388,7 +564,7 @@ client.on(Events.InteractionCreate, async interaction => {
         await updateRosterLive();
     }
 
-    // 4. الضغط على زر "حذف من الروستر"
+    // 6. زر "حذف من الروستر"
     if (interaction.isButton() && interaction.customId === 'btn_roster_remove') {
         const data = getRosterData();
         const keys = Object.keys(data);
@@ -412,7 +588,7 @@ client.on(Events.InteractionCreate, async interaction => {
         await interaction.reply({ content: '👇 اختر الاسم المراد حذفه:', components: [row], ephemeral: true });
     }
 
-    // 5. تأكيد حذف العضو من الروستر
+    // 7. حذف العضو المحدد
     if (interaction.isStringSelectMenu() && interaction.customId === 'select_user_to_remove') {
         await interaction.deferReply({ ephemeral: true });
         const userIdToRemove = interaction.values[0];
@@ -422,26 +598,47 @@ client.on(Events.InteractionCreate, async interaction => {
         delete data[userIdToRemove];
         saveRosterData(data);
 
-        await interaction.editReply({ content: `🗑️ تم حذف **${removedName}** من الروستر إعادته لقائمة غير المسجلين.` });
+        await interaction.editReply({ content: `🗑️ تم حذف **${removedName}** من الروستر وإعادته لقائمة غير المسجلين.` });
 
         await updateRosterLive();
     }
 
-    // 6. زر التحديث اليدوي للوحة
+    // 8. زر تحديث اللوحة يدويًا
     if (interaction.isButton() && interaction.customId === 'btn_roster_refresh') {
         await interaction.deferUpdate();
         await updateRosterLive();
     }
 });
 
+// --- [جاهزية البوت والتحديث التلقائي] ---
 client.once(Events.ClientReady, async c => {
-    console.log(`🚀 البوت شغال ومستعد باسم: ${c.user.tag}`);
+    console.log(`🚀 البوت شغال ومستعد للأتمتة باسم: ${c.user.tag}`);
 
     for (const guild of c.guilds.cache.values()) {
         await guild.members.fetch().catch(() => {});
     }
 
     await updateRosterLive();
+    
+    // تحديث دوري كل 5 دقائق
+    setInterval(async () => {
+        await updateRosterLive();
+    }, 5 * 60 * 1000); 
+});
+
+let rosterUpdateTimeout = null;
+
+client.on(Events.GuildMemberUpdate, (oldMember, newMember) => {
+    const teamRoleId = process.env.TEAM_ROLE_ID;
+    if (!teamRoleId) return;
+
+    const hadRole = oldMember.roles.cache.has(teamRoleId);
+    const hasRole = newMember.roles.cache.has(teamRoleId);
+
+    if (hadRole !== hasRole) {
+        clearTimeout(rosterUpdateTimeout);
+        rosterUpdateTimeout = setTimeout(() => updateRosterLive(), 3000);
+    }
 });
 
 client.login(process.env.DISCORD_TOKEN);
