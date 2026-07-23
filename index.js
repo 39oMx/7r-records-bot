@@ -512,53 +512,21 @@ client.on(Events.InteractionCreate, async interaction => {
     }
 
     // 3. زر "إضافة إلى الروستر" (التحديث الجديد للفلترة)
-    // 3. زر "إضافة إلى الروستر" (محدث لمنع انتهاء المهلة وتجاوز حد 25)
     if (interaction.isButton() && interaction.customId === 'btn_roster_add') {
-        await interaction.deferReply({ ephemeral: true });
-
         const teamRoleId = process.env.TEAM_ROLE_ID;
+        
         if (!teamRoleId) {
-            return interaction.editReply({ content: '❌ رول الفريق غير معرف في الإعدادات.' });
+            return interaction.reply({ content: '❌ رول الفريق غير معرف في الإعدادات.', ephemeral: true });
         }
 
         await interaction.guild.members.fetch().catch(() => {});
         const teamRole = interaction.guild.roles.cache.get(teamRoleId);
         
         if (!teamRole) {
-            return interaction.editReply({ content: '❌ لم يتم العثور على رول الفريق.' });
+            return interaction.reply({ content: '❌ لم يتم العثور على رول الفريق.', ephemeral: true });
         }
 
         const rosterData = getRosterData();
-        const unregisteredMembers = Array.from(teamRole.members.values()).filter(m => !rosterData[m.id]);
-
-        if (unregisteredMembers.length === 0) {
-            return interaction.editReply({ content: '✅ جميع أعضاء الفريق تم تسجيلهم في الروستر بالفعل!' });
-        }
-
-        // أخذ أول 25 عضواً فقط لتجنب خطأ ديسكورد (حد القائمة 25)
-        const options = unregisteredMembers.slice(0, 25).map(member => {
-            return new StringSelectMenuOptionBuilder.setLabel(member.displayName.substring(0, 95))
-                .setDescription(`ID: ${member.id}`.substring(0, 99))
-                .setValue(member.id);
-        });
-
-        const stringSelect = new StringSelectMenuBuilder()
-            .setCustomId('select_user_to_add')
-            .setPlaceholder('اختر العضو المراد إضافته للروستر')
-            .addOptions(options);
-
-        const row = new ActionRowBuilder().addComponents(stringSelect);
-        
-        let warningMessage = '👇 اختر العضو من القائمة التالية:';
-        if (unregisteredMembers.length > 25) {
-            warningMessage += `\n⚠️ ملاحظة: لديك ${unregisteredMembers.length} غير مسجل، يتم عرض أول 25 فقط حالياً حتى يتم تسجيلهم.`;
-        }
-
-        await interaction.editReply({ 
-            content: warningMessage, 
-            components: [row] 
-        });
-    }
         
         // تصفية الأعضاء: جلب من يملك الرول + غير مسجل مسبقاً في الروستر
         const unregisteredMembers = Array.from(teamRole.members.values()).filter(m => !rosterData[m.id]);
