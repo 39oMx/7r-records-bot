@@ -409,8 +409,10 @@ client.on(Events.InteractionCreate, async interaction => {
 
             const currentRank = rankConfigurations[determinedRank];
             
-            // 💡 اعتماد اسم حساب اللاعب الشخصي (Global Display Name أو Username)
-            const nickname = interaction.user.globalName || interaction.user.username;
+            // 💡 أخذ الاسم من الروستر أولاً، وإذا لم يكن مسجلاً يأخذ اسم حسابه الشخصي
+            const rosterData = getRosterData();
+            const nickname = rosterData[discordId] || interaction.user.globalName || interaction.user.username;
+            
             const avatarUrl = interaction.user.displayAvatarURL({ extension: 'png', size: 256 });
 
             const templatePath = path.join(__dirname, 'src', 'templates', currentRank.fileName);
@@ -438,7 +440,7 @@ client.on(Events.InteractionCreate, async interaction => {
             ctx.shadowOffsetX = 2; 
             ctx.shadowOffsetY = 2;
 
-            // 💡 تطبيـق خط Bodoni FLF للبطاقـات
+            // 💡 طباعة اسم الروستر باستخدام خط Bodoni FLF
             ctx.fillStyle = currentRank.textColor; 
             let fontSize = 38; 
             ctx.font = `bold ${fontSize}px "Bodoni FLF"`;
