@@ -619,7 +619,7 @@ client.on(Events.InteractionCreate, async interaction => {
         await updateRosterLive();
     }
 
-    // 6. زر "حذف من الروستر"
+    // 6. زر "حذف من الروستر" (محدث لعرض قوائم مقسمة للمسجلين)
     if (interaction.isButton() && interaction.customId === 'btn_roster_remove') {
         const data = getRosterData();
         const keys = Object.keys(data);
@@ -628,35 +628,62 @@ client.on(Events.InteractionCreate, async interaction => {
             return interaction.reply({ content: '❌ لا يوجد أعضاء مسجلون في الروستر حالياً.', ephemeral: true });
         }
 
-        const options = keys.slice(0, 25).map(id => ({
-            label: data[id],
-            description: `ID: ${id}`,
-            value: id
-        }));
+        // تقسيم الأعضاء المسجلين إلى مجموعات (كل مجموعة 25 عضو كحد أقصى)
+        const maxKeysToDisplay = keys.slice(0, 125);
+        const chunkSize = 25;
+        const chunks = [];
 
-        const stringSelect = new StringSelectMenuBuilder()
-            .setCustomId('select_user_to_remove')
-            .setPlaceholder('اختر الاسم المراد حذفه من الروستر')
-            .addOptions(options);
+        for (let i = 0; i < maxKeysToDisplay.length; i += chunkSize) {
+            chunks.push(maxKeysToDisplay.slice(i, i + chunkSize));
+        }
 
-        const row = new ActionRowBuilder().addComponents(stringSelect);
-        await interaction.reply({ content: '👇 اختر الاسم المراد حذفه:', components: [row], ephemeral: true });
+        const components = [];
+
+        chunks.forEach((chunk, index) => {
+            const options = chunk.map(id => {
+                let displayName = data[id];
+                if (displayName.length > 95) displayName = displayName.substring(0, 95) + '...';
+
+                return {
+                    label: displayName,
+                    description: `ID: ${id}`,
+                    value: id
+                };
+            });
+
+            const stringSelect = new StringSelectMenuBuilder()
+                .setCustomId(`select_user_to_remove_${index}`)
+                .setPlaceholder(`اختر الاسم المراد حذفه (القائمة ${index + 1})`)
+                .addOptions(options);
+
+            components.push(new ActionRowBuilder().addComponents(stringSelect));
+        });
+
+        await interaction.reply({ 
+            content: `👇 اختر الاسم المراد حذفه من الروستر:\n*تم تقسيم الأسماء المسجلة إلى ${chunks.length} قائمة.*`, 
+            components: components, 
+            ephemeral: true 
+        });
     }
 
-    // 7. حذف العضو المحدد
-    if (interaction.isStringSelectMenu() && interaction.customId === 'select_user_to_remove') {
+    // 7. حذف العضو المحدد (محدث للتعامل مع القوائم المتعددة)
+    if (interaction.isStringSelectMenu() && interaction.customId.startsWith('select_user_to_remove_')) {
         await interaction.deferReply({ ephemeral: true });
         const userIdToRemove = interaction.values[0];
 
         const data = getRosterData();
         const removedName = data[userIdToRemove];
-        delete data[userIdToRemove];
-        saveRosterData(data);
+        
+        if (removedName) {
+            delete data[userIdToRemove];
+            saveRosterData(data);
+            await interaction.editReply({ content: `🗑️ تم حذف **${removedName}** من الروستر وإعادته لقائمة غير المسجلين.` });
 
-        await interaction.editReply({ content: `🗑️ تم حذف **${removedName}** من الروستر وإعادته لقائمة غير المسجلين.` });
-
-        await updateControlPanel(interaction.guild);
-        await updateRosterLive();
+            await updateControlPanel(interaction.guild);
+            await updateRosterLive();
+        } else {
+             await interaction.editReply({ content: `❌ حدث خطأ، يبدو أن العضو غير موجود في الروستر.` });
+        }
     }
 
     // 8. زر تحديث اللوحة يدويًا
