@@ -166,8 +166,9 @@ async function updateControlPanel(guild) {
 // --- [دالة رسم وتحديث صورة الروستر المباشرة] ---
 async function updateRosterLive() {
     try {
-        const channelId = process.env.ROSTER_CHANNEL_ID;
-        const messageId = process.env.ROSTER_MESSAGE_ID;
+        const config = getConfig();
+        const channelId = config.ROSTER_CHANNEL_ID || process.env.ROSTER_CHANNEL_ID;
+        const messageId = config.ROSTER_MESSAGE_ID || process.env.ROSTER_MESSAGE_ID;
         const teamRoleId = process.env.TEAM_ROLE_ID;
 
         if (!channelId || !messageId || !teamRoleId) return;
@@ -250,7 +251,6 @@ async function updateRosterLive() {
             
             ctx.drawImage(background, 0, 0, canvas.width, canvas.height);
             
-            // 💡 استخدام خط Bodoni FLF لرسم صورة الروستر
             ctx.font = 'bold 22px "Bodoni FLF"'; 
             ctx.shadowColor = 'rgba(0, 0, 0, 0.7)';
             ctx.shadowBlur = 4;
@@ -365,9 +365,22 @@ client.on(Events.MessageCreate, async message => {
     }
 
     if (message.content === '!setuproster') {
+        const embed = new EmbedBuilder()
+            .setTitle('📋 جاري تهيئة الروستر...')
+            .setDescription('يتم الآن إنشاء رسالة الروستر الجديدة، يرجى الانتظار...')
+            .setColor('#8B0000');
+
+        const msg = await message.channel.send({ embeds: [embed] });
+        
+        const config = getConfig();
+        config.ROSTER_CHANNEL_ID = message.channel.id;
+        config.ROSTER_MESSAGE_ID = msg.id;
+        saveConfig(config);
+
         await updateRosterLive(); 
         await updateControlPanel(message.guild);
-        message.reply('✅ تم تحديث الروستر واللوحة بالكامل!').then(msg => setTimeout(() => msg.delete().catch(() => {}), 3000));
+        
+        message.channel.send('✅ تم إنشاء رسالة روستر جديدة بنجاح وسيتم تحديثها تلقائياً الآن!').then(m => setTimeout(() => m.delete().catch(() => {}), 4000));
         await message.delete().catch(() => {});
     }
 });
