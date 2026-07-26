@@ -1,7 +1,7 @@
 const { 
     Client, GatewayIntentBits, Collection, AttachmentBuilder, Events, 
     EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, PermissionFlagsBits,
-    StringSelectMenuBuilder, ModalBuilder, TextInputBuilder, TextInputStyle 
+    UserSelectMenuBuilder, StringSelectMenuBuilder, StringSelectMenuOptionBuilder, ModalBuilder, TextInputBuilder, TextInputStyle 
 } = require('discord.js');
 const { createCanvas, loadImage, GlobalFonts } = require('@napi-rs/canvas');
 const path = require('path');
@@ -166,9 +166,8 @@ async function updateControlPanel(guild) {
 // --- [دالة رسم وتحديث صورة الروستر المباشرة] ---
 async function updateRosterLive() {
     try {
-        const config = getConfig();
-        const channelId = config.ROSTER_CHANNEL_ID || process.env.ROSTER_CHANNEL_ID;
-        const messageId = config.ROSTER_MESSAGE_ID || process.env.ROSTER_MESSAGE_ID;
+        const channelId = process.env.ROSTER_CHANNEL_ID;
+        const messageId = process.env.ROSTER_MESSAGE_ID;
         const teamRoleId = process.env.TEAM_ROLE_ID;
 
         if (!channelId || !messageId || !teamRoleId) return;
@@ -365,22 +364,9 @@ client.on(Events.MessageCreate, async message => {
     }
 
     if (message.content === '!setuproster') {
-        const embed = new EmbedBuilder()
-            .setTitle('📋 جاري تهيئة الروستر...')
-            .setDescription('يتم الآن إنشاء رسالة الروستر الجديدة، يرجى الانتظار...')
-            .setColor('#8B0000');
-
-        const msg = await message.channel.send({ embeds: [embed] });
-        
-        const config = getConfig();
-        config.ROSTER_CHANNEL_ID = message.channel.id;
-        config.ROSTER_MESSAGE_ID = msg.id;
-        saveConfig(config);
-
         await updateRosterLive(); 
         await updateControlPanel(message.guild);
-        
-        message.channel.send('✅ تم إنشاء رسالة روستر جديدة بنجاح وسيتم تحديثها تلقائياً الآن!').then(m => setTimeout(() => m.delete().catch(() => {}), 4000));
+        message.reply('✅ تم تحديث الروستر واللوحة بالكامل!').then(msg => setTimeout(() => msg.delete().catch(() => {}), 3000));
         await message.delete().catch(() => {});
     }
 });
@@ -524,66 +510,65 @@ client.on(Events.InteractionCreate, async interaction => {
         await interaction.editReply({ embeds: [lbEmbed] });
     }
 
-    // 3. زر "إضافة إلى الروستر" (محدث لعرض قوائم لأعضاء الفريق فقط بحد أقصى 25 لكل قائمة)
+    // 3. زر "إضافة إلى الروستر" (تقسيم الأعضاء إلى مجموعات من 25 بدون حدود)
     if (interaction.isButton() && interaction.customId === 'btn_roster_add') {
         const teamRoleId = process.env.TEAM_ROLE_ID;
-        if (!teamRoleId) return interaction.reply({ content: '❌ لم يتم إعداد رتبة الفريق في ملف .env', ephemeral: true });
+        
+        if (!teamRoleId) {
+            return interaction.reply({ content: '❌ رول الفريق غير معرف في الإعدادات.', ephemeral: true });
+        }
 
-        const role = interaction.guild.roles.cache.get(teamRoleId);
-        if (!role) return interaction.reply({ content: '❌ لم أتمكن من العثور على رتبة الفريق.', ephemeral: true });
+        await interaction.guild.members.fetch().catch(() => {});
+        const teamRole = interaction.guild.roles.cache.get(teamRoleId);
+        
+        if (!teamRole) {
+            return interaction.reply({ content: '❌ لم يتم العثور على رول الفريق.', ephemeral: true });
+        }
 
         const rosterData = getRosterData();
-        const teamMembers = Array.from(role.members.values());
         
-        // استخراج الأعضاء الذين يحملون رتبة الفريق وغير مسجلين في الروستر
-        const unregistered = teamMembers.filter(m => !rosterData[m.id]);
+        // جلب من يملك رول الفريق + غير مسجل في الروستر
+        const unregisteredMembers = Array.from(teamRole.members.values()).filter(m => !rosterData[m.id]);
 
-        if (unregistered.length === 0) {
-            return interaction.reply({ content: '✅ جميع أعضاء الفريق مسجلون بالفعل في الروستر!', ephemeral: true });
+        if (unregisteredMembers.length === 0) {
+            return interaction.reply({ content: '✅ جميع أعضاء الفريق تم تسجيلهم في الروستر بالفعل!', ephemeral: true });
         }
 
-        // تقسيم الأعضاء إلى مجموعات (كل مجموعة 25 عضو كحد أقصى)
-        // الديسكورد يسمح بـ 5 قوائم منسدلة كحد أقصى في الرسالة الواحدة (المجموع 125 عضو)
-        const maxMembersToDisplay = unregistered.slice(0, 125); 
-        const chunkSize = 25;
+        // تقسيم الأعضاء لحزم من 25 (بحد أقصى 5 قوائم منسدلة)
         const chunks = [];
-        
-        for (let i = 0; i < maxMembersToDisplay.length; i += chunkSize) {
-            chunks.push(maxMembersToDisplay.slice(i, i + chunkSize));
+        for (let i = 0; i < unregisteredMembers.length; i += 25) {
+            chunks.push(unregisteredMembers.slice(i, i + 25));
         }
 
-        const components = [];
-        
-        chunks.forEach((chunk, index) => {
-            const options = chunk.map(member => {
-                let displayName = member.user.globalName || member.user.username;
-                // التأكد من أن الاسم لا يتجاوز 100 حرف (قوانين ديسكورد)
-                if (displayName.length > 95) displayName = displayName.substring(0, 95) + '...';
-                
-                return {
-                    label: displayName,
-                    description: `ID: ${member.id}`,
-                    value: member.id
-                };
-            });
+        const rows = [];
+        for (let r = 0; r < Math.min(chunks.length, 5); r++) {
+            const chunk = chunks[r];
+            const startNum = r * 25 + 1;
+            const endNum = r * 25 + chunk.length;
+
+            const options = chunk.map(member => ({
+                label: member.displayName.substring(0, 100),
+                description: `ID: ${member.id}`,
+                value: member.id
+            }));
 
             const stringSelect = new StringSelectMenuBuilder()
-                .setCustomId(`select_user_to_add_${index}`)
-                .setPlaceholder(`اختر العضو للإضافة (القائمة ${index + 1})`)
+                .setCustomId(`select_user_to_add_${r}`)
+                .setPlaceholder(`اختر العضو المراد إضافته (${startNum} - ${endNum})`)
                 .addOptions(options);
 
-            components.push(new ActionRowBuilder().addComponents(stringSelect));
-        });
+            rows.push(new ActionRowBuilder().addComponents(stringSelect));
+        }
 
         await interaction.reply({ 
-            content: `👇 اختر العضو المراد إضافته للروستر (خاص بأعضاء الفريق فقط):\n*تم تقسيم الأعضاء الغير مسجلين إلى ${chunks.length} قائمة.*`, 
-            components: components, 
+            content: `👇 اختر العضو من القائمة التالية (إجمالي الأعضاء غير المسجلين: **${unregisteredMembers.length}**):`, 
+            components: rows, 
             ephemeral: true 
         });
     }
 
-    // 4. اختيار العضو من القائمة المنسدلة المخصصة
-    if (interaction.isStringSelectMenu() && interaction.customId.startsWith('select_user_to_add_')) {
+    // 4. اختيار العضو المراد إضافته للروستر
+    if (interaction.isStringSelectMenu() && interaction.customId.startsWith('select_user_to_add')) {
         const selectedUserId = interaction.values[0];
 
         const modal = new ModalBuilder()
@@ -619,7 +604,7 @@ client.on(Events.InteractionCreate, async interaction => {
         await updateRosterLive();
     }
 
-    // 6. زر "حذف من الروستر" (محدث لعرض قوائم مقسمة للمسجلين)
+    // 6. زر "حذف من الروستر" (تقسيم المسجلين إلى مجموعات من 25 بدون حدود)
     if (interaction.isButton() && interaction.customId === 'btn_roster_remove') {
         const data = getRosterData();
         const keys = Object.keys(data);
@@ -628,62 +613,53 @@ client.on(Events.InteractionCreate, async interaction => {
             return interaction.reply({ content: '❌ لا يوجد أعضاء مسجلون في الروستر حالياً.', ephemeral: true });
         }
 
-        // تقسيم الأعضاء المسجلين إلى مجموعات (كل مجموعة 25 عضو كحد أقصى)
-        const maxKeysToDisplay = keys.slice(0, 125);
-        const chunkSize = 25;
+        // تقسيم الأعضاء المسجلين لحزم من 25 (بحد أقصى 5 قوائم منسدلة)
         const chunks = [];
-
-        for (let i = 0; i < maxKeysToDisplay.length; i += chunkSize) {
-            chunks.push(maxKeysToDisplay.slice(i, i + chunkSize));
+        for (let i = 0; i < keys.length; i += 25) {
+            chunks.push(keys.slice(i, i + 25));
         }
 
-        const components = [];
+        const rows = [];
+        for (let r = 0; r < Math.min(chunks.length, 5); r++) {
+            const chunk = chunks[r];
+            const startNum = r * 25 + 1;
+            const endNum = r * 25 + chunk.length;
 
-        chunks.forEach((chunk, index) => {
-            const options = chunk.map(id => {
-                let displayName = data[id];
-                if (displayName.length > 95) displayName = displayName.substring(0, 95) + '...';
-
-                return {
-                    label: displayName,
-                    description: `ID: ${id}`,
-                    value: id
-                };
-            });
+            const options = chunk.map(id => ({
+                label: String(data[id]).substring(0, 100),
+                description: `ID: ${id}`,
+                value: id
+            }));
 
             const stringSelect = new StringSelectMenuBuilder()
-                .setCustomId(`select_user_to_remove_${index}`)
-                .setPlaceholder(`اختر الاسم المراد حذفه (القائمة ${index + 1})`)
+                .setCustomId(`select_user_to_remove_${r}`)
+                .setPlaceholder(`اختر الاسم المراد حذفه (${startNum} - ${endNum})`)
                 .addOptions(options);
 
-            components.push(new ActionRowBuilder().addComponents(stringSelect));
-        });
+            rows.push(new ActionRowBuilder().addComponents(stringSelect));
+        }
 
         await interaction.reply({ 
-            content: `👇 اختر الاسم المراد حذفه من الروستر:\n*تم تقسيم الأسماء المسجلة إلى ${chunks.length} قائمة.*`, 
-            components: components, 
+            content: `👇 اختر الاسم المراد حذفه من الروستر (إجمالي المسجلين: **${keys.length}**):`, 
+            components: rows, 
             ephemeral: true 
         });
     }
 
-    // 7. حذف العضو المحدد (محدث للتعامل مع القوائم المتعددة)
-    if (interaction.isStringSelectMenu() && interaction.customId.startsWith('select_user_to_remove_')) {
+    // 7. حذف العضو المحدد من القائمة
+    if (interaction.isStringSelectMenu() && interaction.customId.startsWith('select_user_to_remove')) {
         await interaction.deferReply({ ephemeral: true });
         const userIdToRemove = interaction.values[0];
 
         const data = getRosterData();
         const removedName = data[userIdToRemove];
-        
-        if (removedName) {
-            delete data[userIdToRemove];
-            saveRosterData(data);
-            await interaction.editReply({ content: `🗑️ تم حذف **${removedName}** من الروستر وإعادته لقائمة غير المسجلين.` });
+        delete data[userIdToRemove];
+        saveRosterData(data);
 
-            await updateControlPanel(interaction.guild);
-            await updateRosterLive();
-        } else {
-             await interaction.editReply({ content: `❌ حدث خطأ، يبدو أن العضو غير موجود في الروستر.` });
-        }
+        await interaction.editReply({ content: `🗑️ تم حذف **${removedName}** من الروستر وإعادته لقائمة غير المسجلين.` });
+
+        await updateControlPanel(interaction.guild);
+        await updateRosterLive();
     }
 
     // 8. زر تحديث اللوحة يدويًا
@@ -724,7 +700,6 @@ client.on(Events.GuildMemberUpdate, async (oldMember, newMember) => {
     const hadRole = oldMember.roles.cache.has(teamRoleId);
     const hasRole = newMember.roles.cache.has(teamRoleId);
 
-    // 💡 إذا تمت إزالة رتبة الفريق من العضو -> يتم حذفه من ملف الروستر فوراً
     if (hadRole && !hasRole) {
         const rosterData = getRosterData();
         if (rosterData[newMember.id]) {
