@@ -1,7 +1,7 @@
 const { 
     Client, GatewayIntentBits, Collection, AttachmentBuilder, Events, 
     EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, PermissionFlagsBits,
-    UserSelectMenuBuilder, StringSelectMenuBuilder, ModalBuilder, TextInputBuilder, TextInputStyle 
+    StringSelectMenuBuilder, ModalBuilder, TextInputBuilder, TextInputStyle 
 } = require('discord.js');
 const { createCanvas, loadImage, GlobalFonts } = require('@napi-rs/canvas');
 const path = require('path');
@@ -524,20 +524,66 @@ client.on(Events.InteractionCreate, async interaction => {
         await interaction.editReply({ embeds: [lbEmbed] });
     }
 
-    // 3. زر "إضافة إلى الروستر"
+    // 3. زر "إضافة إلى الروستر" (محدث لعرض قوائم لأعضاء الفريق فقط بحد أقصى 25 لكل قائمة)
     if (interaction.isButton() && interaction.customId === 'btn_roster_add') {
-        const userSelect = new UserSelectMenuBuilder()
-            .setCustomId('select_user_to_add')
-            .setPlaceholder('اختر العضو المراد إضافته للروستر')
-            .setMinValues(1)
-            .setMaxValues(1);
+        const teamRoleId = process.env.TEAM_ROLE_ID;
+        if (!teamRoleId) return interaction.reply({ content: '❌ لم يتم إعداد رتبة الفريق في ملف .env', ephemeral: true });
 
-        const row = new ActionRowBuilder().addComponents(userSelect);
-        await interaction.reply({ content: '👇 اختر العضو من القائمة التالية:', components: [row], ephemeral: true });
+        const role = interaction.guild.roles.cache.get(teamRoleId);
+        if (!role) return interaction.reply({ content: '❌ لم أتمكن من العثور على رتبة الفريق.', ephemeral: true });
+
+        const rosterData = getRosterData();
+        const teamMembers = Array.from(role.members.values());
+        
+        // استخراج الأعضاء الذين يحملون رتبة الفريق وغير مسجلين في الروستر
+        const unregistered = teamMembers.filter(m => !rosterData[m.id]);
+
+        if (unregistered.length === 0) {
+            return interaction.reply({ content: '✅ جميع أعضاء الفريق مسجلون بالفعل في الروستر!', ephemeral: true });
+        }
+
+        // تقسيم الأعضاء إلى مجموعات (كل مجموعة 25 عضو كحد أقصى)
+        // الديسكورد يسمح بـ 5 قوائم منسدلة كحد أقصى في الرسالة الواحدة (المجموع 125 عضو)
+        const maxMembersToDisplay = unregistered.slice(0, 125); 
+        const chunkSize = 25;
+        const chunks = [];
+        
+        for (let i = 0; i < maxMembersToDisplay.length; i += chunkSize) {
+            chunks.push(maxMembersToDisplay.slice(i, i + chunkSize));
+        }
+
+        const components = [];
+        
+        chunks.forEach((chunk, index) => {
+            const options = chunk.map(member => {
+                let displayName = member.user.globalName || member.user.username;
+                // التأكد من أن الاسم لا يتجاوز 100 حرف (قوانين ديسكورد)
+                if (displayName.length > 95) displayName = displayName.substring(0, 95) + '...';
+                
+                return {
+                    label: displayName,
+                    description: `ID: ${member.id}`,
+                    value: member.id
+                };
+            });
+
+            const stringSelect = new StringSelectMenuBuilder()
+                .setCustomId(`select_user_to_add_${index}`)
+                .setPlaceholder(`اختر العضو للإضافة (القائمة ${index + 1})`)
+                .addOptions(options);
+
+            components.push(new ActionRowBuilder().addComponents(stringSelect));
+        });
+
+        await interaction.reply({ 
+            content: `👇 اختر العضو المراد إضافته للروستر (خاص بأعضاء الفريق فقط):\n*تم تقسيم الأعضاء الغير مسجلين إلى ${chunks.length} قائمة.*`, 
+            components: components, 
+            ephemeral: true 
+        });
     }
 
-    // 4. اختيار العضو من القائمة
-    if (interaction.isUserSelectMenu() && interaction.customId === 'select_user_to_add') {
+    // 4. اختيار العضو من القائمة المنسدلة المخصصة
+    if (interaction.isStringSelectMenu() && interaction.customId.startsWith('select_user_to_add_')) {
         const selectedUserId = interaction.values[0];
 
         const modal = new ModalBuilder()
