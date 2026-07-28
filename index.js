@@ -59,7 +59,7 @@ function saveConfig(data) {
 const fontPath = path.join(__dirname, 'src', 'templates', 'BodoniFLF.ttf');
 GlobalFonts.registerFromPath(fontPath, 'Bodoni FLF');
 
-// ⬇️ === [ أضف أيديهات الرتب والأسماء المخصصة هنا بالترتيب ] === ⬇️1431452982008090705
+// ⬇️ === [ أضف أيديهات الرتب والأسماء المخصصة هنا بالترتيب ] === ⬇️
 const CUSTOM_ROLES = [
     { id: '1150626780550533141', displayName: 'OWNER' },
     { id: '1212529351396954162', displayName: 'CEO' },
@@ -71,9 +71,11 @@ const CUSTOM_ROLES = [
     { id: '1515054401881112606', displayName: 'QUALITY CONTROL' },
     { id: '1495722899204472872', displayName: 'RG LEADER' },
     { id: '1524770799888633886', displayName: 'AMBASSADOR' },
-    { id: '1416430043655176262', displayName: '7R MEMBER' },
-    { id: '1431452982008090705', displayName: '7R MEMBER' }
+    { id: '1416430043655176262', displayName: '7R MEMBER' }    
 ];
+
+// ⬇️ === [ مصفوفة رتب الفريق المعتمدة للروستر ] === ⬇️
+const TEAM_ROLE_IDS = [process.env.TEAM_ROLE_ID, '1431452982008090705'].filter(Boolean);
 
 const rankConfigurations = {
     silver: { fileName: 'silver.png', textColor: '#FFFFFF', idColor: '#CCCCCC', avatar: { x: 280, y: 411, r: 131 }, username: { x: 720, y: 610, maxWidth: 450 }, userId: { x: 720, y: 700 }, kd: { x: 256, y: 995 }, kills: { x: 513, y: 995 }, games: { x: 774, y: 995 } },
@@ -92,9 +94,8 @@ async function updateControlPanel(guild) {
         const config = getConfig();
         const controlChannelId = config.ROSTER_CONTROL_CHANNEL_ID || process.env.ROSTER_CONTROL_CHANNEL_ID;
         const controlMessageId = config.ROSTER_CONTROL_MESSAGE_ID || process.env.ROSTER_CONTROL_MESSAGE_ID;
-        const teamRoleId = process.env.TEAM_ROLE_ID;
 
-        if (!controlChannelId || !controlMessageId || !teamRoleId) return;
+        if (!controlChannelId || !controlMessageId || TEAM_ROLE_IDS.length === 0) return;
 
         const channel = await client.channels.fetch(controlChannelId).catch(() => null);
         if (!channel) return;
@@ -104,11 +105,15 @@ async function updateControlPanel(guild) {
 
         await guild.members.fetch().catch(() => {});
 
-        const role = guild.roles.cache.get(teamRoleId);
-        if (!role) return;
+        // جلب الأعضاء من جميع رتب الفريق بدون تكرار
+        const teamMembersMap = new Map();
+        TEAM_ROLE_IDS.forEach(id => {
+            const role = guild.roles.cache.get(id);
+            if (role) role.members.forEach(m => teamMembersMap.set(m.id, m));
+        });
 
+        const teamMembers = Array.from(teamMembersMap.values());
         const rosterData = getRosterData();
-        const teamMembers = Array.from(role.members.values());
 
         const unregistered = teamMembers.filter(m => !rosterData[m.id]);
         const registered = teamMembers.filter(m => rosterData[m.id]);
@@ -170,23 +175,32 @@ async function updateRosterLive() {
     try {
         const channelId = process.env.ROSTER_CHANNEL_ID;
         const messageId = process.env.ROSTER_MESSAGE_ID;
-        const teamRoleId = process.env.TEAM_ROLE_ID;
 
-        if (!channelId || !messageId || !teamRoleId) return;
+        if (!channelId || !messageId || TEAM_ROLE_IDS.length === 0) return;
 
         const channel = await client.channels.fetch(channelId).catch(() => null);
         if (!channel) return;
-
-        const role = channel.guild.roles.cache.get(teamRoleId);
-        if (!role) return;
 
         const message = await channel.messages.fetch(messageId).catch(() => null);
         if (!message) return;
 
         const rosterData = getRosterData();
+        const teamMembersMap = new Map();
+        let primaryRole = null;
+
+        // دمج أعضاء الرتب المعتمدة للفريق وتحديد الرتبة الأساسية لألوان الرسالة
+        TEAM_ROLE_IDS.forEach(id => {
+            const role = channel.guild.roles.cache.get(id);
+            if (role) {
+                if (!primaryRole) primaryRole = role; 
+                role.members.forEach(m => teamMembersMap.set(m.id, m));
+            }
+        });
+
+        if (!primaryRole) return; 
 
         const membersProcessed = [];
-        Array.from(role.members.values()).forEach(member => {
+        Array.from(teamMembersMap.values()).forEach(member => {
             if (rosterData[member.id]) {
                 let matchedCustomRole = null;
                 let priorityIndex = 999; 
@@ -230,9 +244,9 @@ async function updateRosterLive() {
 
         if (chunks.length === 0) {
             const embed = new EmbedBuilder()
-                .setTitle(`📋 قائمة أبطال فريق: ${role.name}`)
+                .setTitle(`📋 قائمة أبطال فريق: ${primaryRole.name}`)
                 .setDescription('لا يوجد أعضاء مسجلين في الروستر حالياً.')
-                .setColor(role.hexColor || '#FF4500')
+                .setColor(primaryRole.hexColor || '#FF4500')
                 .setThumbnail(channel.guild.iconURL({ dynamic: true }))
                 .setFooter({ text: `آخر تحديث: ${new Date().toLocaleTimeString('ar-EG')}` });
             await message.edit({ embeds: [embed], files: [] });
@@ -293,11 +307,11 @@ async function updateRosterLive() {
             attachments.push(new AttachmentBuilder(buffer, { name: fileName }));
 
             const imgEmbed = new EmbedBuilder()
-                .setColor(role.hexColor || '#8B0000')
+                .setColor(primaryRole.hexColor || '#8B0000')
                 .setImage(`attachment://${fileName}`);
 
             if (c === 0) {
-                imgEmbed.setTitle(`📋 قائمة أبطال فريق: ${role.name}`)
+                imgEmbed.setTitle(`📋 قائمة أبطال فريق: ${primaryRole.name}`)
                         .setDescription(`إجمالي الأعضاء المسجلين: **${membersProcessed.length}** لاعب`)
                         .setThumbnail(channel.guild.iconURL({ dynamic: true }));
             }
@@ -512,31 +526,31 @@ client.on(Events.InteractionCreate, async interaction => {
         await interaction.editReply({ embeds: [lbEmbed] });
     }
 
-    // 3. زر "إضافة إلى الروستر" (تقسيم الأعضاء إلى مجموعات من 25 بدون حدود)
+    // 3. زر "إضافة إلى الروستر"
     if (interaction.isButton() && interaction.customId === 'btn_roster_add') {
-        const teamRoleId = process.env.TEAM_ROLE_ID;
-        
-        if (!teamRoleId) {
-            return interaction.reply({ content: '❌ رول الفريق غير معرف في الإعدادات.', ephemeral: true });
+        if (TEAM_ROLE_IDS.length === 0) {
+            return interaction.reply({ content: '❌ رتب الفريق غير معرفة في الإعدادات.', ephemeral: true });
         }
 
         await interaction.guild.members.fetch().catch(() => {});
-        const teamRole = interaction.guild.roles.cache.get(teamRoleId);
         
-        if (!teamRole) {
-            return interaction.reply({ content: '❌ لم يتم العثور على رول الفريق.', ephemeral: true });
+        const teamMembersMap = new Map();
+        TEAM_ROLE_IDS.forEach(id => {
+            const r = interaction.guild.roles.cache.get(id);
+            if (r) r.members.forEach(m => teamMembersMap.set(m.id, m));
+        });
+
+        if (teamMembersMap.size === 0) {
+            return interaction.reply({ content: '❌ لم يتم العثور على أي من رتب الفريق، أو لا يوجد أعضاء يحملونها.', ephemeral: true });
         }
 
         const rosterData = getRosterData();
-        
-        // جلب من يملك رول الفريق + غير مسجل في الروستر
-        const unregisteredMembers = Array.from(teamRole.members.values()).filter(m => !rosterData[m.id]);
+        const unregisteredMembers = Array.from(teamMembersMap.values()).filter(m => !rosterData[m.id]);
 
         if (unregisteredMembers.length === 0) {
             return interaction.reply({ content: '✅ جميع أعضاء الفريق تم تسجيلهم في الروستر بالفعل!', ephemeral: true });
         }
 
-        // تقسيم الأعضاء لحزم من 25 (بحد أقصى 5 قوائم منسدلة)
         const chunks = [];
         for (let i = 0; i < unregisteredMembers.length; i += 25) {
             chunks.push(unregisteredMembers.slice(i, i + 25));
@@ -606,7 +620,7 @@ client.on(Events.InteractionCreate, async interaction => {
         await updateRosterLive();
     }
 
-    // 6. زر "حذف من الروستر" (تقسيم المسجلين إلى مجموعات من 25 بدون حدود)
+    // 6. زر "حذف من الروستر"
     if (interaction.isButton() && interaction.customId === 'btn_roster_remove') {
         const data = getRosterData();
         const keys = Object.keys(data);
@@ -615,7 +629,6 @@ client.on(Events.InteractionCreate, async interaction => {
             return interaction.reply({ content: '❌ لا يوجد أعضاء مسجلون في الروستر حالياً.', ephemeral: true });
         }
 
-        // تقسيم الأعضاء المسجلين لحزم من 25 (بحد أقصى 5 قوائم منسدلة)
         const chunks = [];
         for (let i = 0; i < keys.length; i += 25) {
             chunks.push(keys.slice(i, i + 25));
@@ -692,26 +705,28 @@ client.once(Events.ClientReady, async c => {
     }, 5 * 60 * 1000); 
 });
 
-// --- [متابعة تغييرات الرتب وإزالة العضو تلقائياً عند سحب رتبة الفريق] ---
+// --- [متابعة تغييرات الرتب وإزالة العضو تلقائياً] ---
 let rosterUpdateTimeout = null;
 
 client.on(Events.GuildMemberUpdate, async (oldMember, newMember) => {
-    const teamRoleId = process.env.TEAM_ROLE_ID;
-    if (!teamRoleId) return;
+    if (TEAM_ROLE_IDS.length === 0) return;
 
-    const hadRole = oldMember.roles.cache.has(teamRoleId);
-    const hasRole = newMember.roles.cache.has(teamRoleId);
+    // التحقق مما إذا كان العضو يمتلك أياً من رتب الفريق قبل وبعد التحديث
+    const hadAnyTeamRole = TEAM_ROLE_IDS.some(id => oldMember.roles.cache.has(id));
+    const hasAnyTeamRole = TEAM_ROLE_IDS.some(id => newMember.roles.cache.has(id));
 
-    if (hadRole && !hasRole) {
+    // إذا كان يمتلك إحدى الرتب سابقاً والآن لا يمتلك أيّاً منها (تم سحب جميع رتب الفريق)
+    if (hadAnyTeamRole && !hasAnyTeamRole) {
         const rosterData = getRosterData();
         if (rosterData[newMember.id]) {
             delete rosterData[newMember.id];
             saveRosterData(rosterData);
-            console.log(`🗑️ تم إزالة ${newMember.user.tag} من الروستر تلقائياً بسبب سحب رتبة الفريق.`);
+            console.log(`🗑️ تم إزالة ${newMember.user.tag} من الروستر تلقائياً بسبب سحب رتب الفريق منه.`);
         }
     }
 
-    if (hadRole !== hasRole) {
+    // إذا تغيرت حالة انتمائه للفريق ككل (سواء انضم حديثاً أو غادر)
+    if (hadAnyTeamRole !== hasAnyTeamRole) {
         clearTimeout(rosterUpdateTimeout);
         rosterUpdateTimeout = setTimeout(async () => {
             await updateControlPanel(newMember.guild);
