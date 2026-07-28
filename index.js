@@ -59,7 +59,7 @@ function saveConfig(data) {
 const fontPath = path.join(__dirname, 'src', 'templates', 'BodoniFLF.ttf');
 GlobalFonts.registerFromPath(fontPath, 'Bodoni FLF');
 
-// ⬇️ === [ أضف أيديهات الرتب والأسماء المخصصة هنا بالترتيب ] === ⬇️
+// ⬇️ === [ أضف أيديهات الرتب والأسماء المخصصة هنا بالترتيب ] === ⬇️1416304413844439180
 const CUSTOM_ROLES = [
     { id: '1150626780550533141', displayName: 'OWNER' },
     { id: '1212529351396954162', displayName: 'CEO' },
@@ -67,6 +67,7 @@ const CUSTOM_ROLES = [
     { id: '1400698234669633637', displayName: 'CLAN LEADER' },
     { id: '1405670992025616394', displayName: 'ADMIN' },
     { id: '1408511418478755850', displayName: 'HIGH STAFF' },
+    { id: '1416304413844439180', displayName: 'GIRLS MANGMENT' },
     { id: '1515054401881112606', displayName: 'QUALITY CONTROL' },
     { id: '1495722899204472872', displayName: 'RG LEADER' },
     { id: '1524770799888633886', displayName: 'AMBASSADOR' },
